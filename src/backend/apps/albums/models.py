@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING, Any
 import secrets
 import uuid
 from django.conf import settings
@@ -9,6 +10,12 @@ def generate_share_token():
 
 
 class Album(models.Model):
+    if TYPE_CHECKING:
+        shares: models.Manager[Any]
+        clusters: models.Manager[Any]
+        photos: models.Manager[Any]
+        jobs: models.Manager[Any]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,

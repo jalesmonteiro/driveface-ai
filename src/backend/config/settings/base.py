@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 import environ
@@ -8,6 +9,11 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # PROJECT_ROOT aponta para a raiz do repositório
 PROJECT_ROOT = BASE_DIR.parent.parent
+APPS_DIR = BASE_DIR / "apps"
+
+for _path in (str(BASE_DIR), str(APPS_DIR)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),

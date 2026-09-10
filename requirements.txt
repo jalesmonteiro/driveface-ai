@@ -1,0 +1,17 @@
+# Core Dependencies - DriveFace AI
+Django>=5.0,<5.2
+djangorestframework>=3.15.0
+djangorestframework-simplejwt>=5.3.1
+django-cors-headers>=4.3.1
+django-environ>=0.11.2
+argon2-cffi>=23.1.0
+cryptography>=42.0.0
+celery>=5.3.6
+redis>=5.0.1
+psycopg[binary]>=3.1.18
+pgvector>=0.2.5
+google-api-python-client>=2.115.0
+google-auth-oauthlib>=1.2.0
+scikit-learn>=1.4.0
+numpy>=1.26.0
+pillow>=10.2.0

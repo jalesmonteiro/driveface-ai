@@ -44,7 +44,7 @@ class IdentitySuggester:
                 min_distance = dist
                 best_identity = identity
 
-        if min_distance <= self.threshold:
+        if best_identity is not None and min_distance <= self.threshold:
             return best_identity, min_distance
 
         return None

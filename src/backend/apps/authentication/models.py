@@ -30,7 +30,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # pyrefly: ignore[bad-override-mutable-attribute]
     email = models.EmailField("E-mail", unique=True, db_index=True)
     full_name = models.CharField("Nome Completo", max_length=255, blank=True)
     is_active = models.BooleanField("Ativo", default=True)

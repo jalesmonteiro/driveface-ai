@@ -43,6 +43,8 @@ dev = [
     "black>=24.2.0",
     "isort>=5.13.0",
     "testcontainers[postgresql]>=3.7.1",
+    "django-stubs>=5.1.0",
+    "djangorestframework-stubs>=3.15.0",
 ]
 
 [tool.pytest.ini_options]
@@ -51,3 +53,18 @@ pythonpath = ["src/backend", "src/backend/apps"]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-v --strict-markers"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src/backend", "src/backend/apps"]
+
+[tool.pyrefly]
+search_path = ["src/backend", "src/backend/apps"]
+replace_untyped_imports_with_any = ["*"]
+
+[tool.pyrefly.errors]
+untyped-import = "ignore"
+bad-override-mutable-attribute = "ignore"
+bad-override = "ignore"
+missing-attribute = "ignore"

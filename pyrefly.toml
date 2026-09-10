@@ -1,0 +1,13 @@
+# Configuração do Pyrefly para resolução de módulos Django e compatibilidade com ORM
+search_path = [
+  "src/backend",
+  "src/backend/apps"
+]
+
+replace_untyped_imports_with_any = ["*"]
+
+[errors]
+untyped-import = "ignore"
+bad-override-mutable-attribute = "ignore"
+bad-override = "ignore"
+missing-attribute = "ignore"
