@@ -35,6 +35,7 @@ class JobStatusSerializer(serializers.ModelSerializer):
             "processed_images",
             "progress_percentage",
             "error_message",
+            "clustering_metrics",
             "started_at",
             "finished_at",
         )

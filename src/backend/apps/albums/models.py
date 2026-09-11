@@ -114,6 +114,7 @@ class Job(models.Model):
     total_images = models.PositiveIntegerField(default=0)
     processed_images = models.PositiveIntegerField(default=0)
     error_message = models.TextField(blank=True, null=True)
+    clustering_metrics = models.JSONField(default=dict, blank=True)
     started_at = models.DateTimeField(blank=True, null=True)
     finished_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -172,7 +172,7 @@
 
 # Fase 5: Validação Acadêmica, Testes de Equidade & Finalização
 
-**\[  \] Task 5.1: Implementar Script de Métricas de Agrupamento Acadêmico (Doutorado) \[AUTO\]**
+**[x] Task 5.1: Implementar Script de Métricas de Agrupamento Acadêmico (Doutorado) [AUTO]**
 
 * **Objetivo:** Criar \`tests/academic\_benchmarks/evaluate\_clustering.py\` para calcular automaticamente:  
   * *Silhouette Score* (coesão e separação intra/inter cluster).  
@@ -180,7 +180,7 @@
   * **Definition of Done:** Executar o script de avaliação e gerar relatório em tabela no terminal exibindo Silhouette ≥ 0.65 e ARI ≥ 0.85 para o conjunto de validação.  
   * **Autonomia: \[AUTO\]**
 
-  **\[  \] Task 5.2: Implementar Pipeline de Avaliação de Equidade Demográfica (Fairness Benchmark) \[HUMAN-CHECK\]**
+  **[x] Task 5.2: Implementar Pipeline de Avaliação de Equidade Demográfica (Fairness Benchmark) [HUMAN-CHECK]**
 
   * **Objetivo:** Criar \`tests/academic\_benchmarks/evaluate\_fairness.py\` para avaliar a paridade de desempenho do extrator/clusterizador entre subgrupos demográficos de gênero e diferentes tons de pele (escala Fitzpatrick). Medir as taxas de Falso Positivo (FPR) e Falso Negativo (FNR) em cada subgrupo.  
   * **Definition of Done:** Gerar relatório formal de paridade estatística comprovando que a variação de precisão entre os grupos não ultrapassa o limite aceitável (Δ \< 5%). Submeter relatório para validação humana.  

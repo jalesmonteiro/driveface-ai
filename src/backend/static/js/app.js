@@ -974,6 +974,10 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
+        // Renderiza métricas de qualidade do agrupamento por álbum (PPgTI / UFRN)
+        const metrics = data.clustering_metrics || (job && job.clustering_metrics) || null;
+        updateAlbumMetricsDisplay(metrics);
+
         renderClusters(state.currentClusters, data.folder_name, jobStatus, data.job_error, job, albumId);
 
         // Auto-polling em tempo real a cada 2.5s se estiver processando
@@ -985,6 +989,7 @@ document.addEventListener("DOMContentLoaded", () => {
           showToast("🎉 Processamento concluído! Pessoas identificadas.", "success");
         }
       } else {
+        updateAlbumMetricsDisplay(null);
         clustersGrid.innerHTML = `
           <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem;">
             <p class="text-muted">Não foi possível carregar as faces deste álbum.</p>
@@ -992,6 +997,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
       }
     } catch (err) {
+      updateAlbumMetricsDisplay(null);
       console.error("Erro ao carregar clusters:", err);
       clustersGrid.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem;">
@@ -999,6 +1005,60 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
     }
+  }
+
+  function updateAlbumMetricsDisplay(metrics) {
+    const targets = [
+      {
+        box: document.getElementById("albumMetricsContainer"),
+        sil: document.getElementById("metricSilhouette"),
+        db: document.getElementById("metricDBIndex"),
+        ratio: document.getElementById("metricGroupedRatio"),
+      },
+      {
+        box: document.getElementById("albumMetricsContainerIndex"),
+        sil: document.getElementById("metricSilhouetteIndex"),
+        db: document.getElementById("metricDBIndexIndex"),
+        ratio: document.getElementById("metricGroupedRatioIndex"),
+      },
+    ];
+
+    targets.forEach(({ box, sil, db, ratio }) => {
+      if (!box) return;
+      if (!metrics || (metrics.silhouette_score === null && metrics.total_faces === 0)) {
+        box.style.display = "none";
+        return;
+      }
+
+      box.style.display = "flex";
+
+      if (sil) {
+        if (metrics.silhouette_score !== null && metrics.silhouette_score !== undefined) {
+          sil.innerText = Number(metrics.silhouette_score).toFixed(2);
+        } else {
+          sil.innerText = "--";
+        }
+      }
+
+      if (db) {
+        if (metrics.davies_bouldin_score !== null && metrics.davies_bouldin_score !== undefined) {
+          db.innerText = Number(metrics.davies_bouldin_score).toFixed(2);
+        } else {
+          db.innerText = "--";
+        }
+      }
+
+      if (ratio) {
+        const clustered = metrics.clustered_faces || 0;
+        const total = metrics.total_faces || 0;
+        if (total > 0) {
+          const pct = Math.round((clustered / total) * 100);
+          ratio.innerText = `${pct}% (${clustered}/${total})`;
+        } else {
+          ratio.innerText = "--";
+        }
+      }
+    });
   }
 
   const avatarEmojis = ["👩", "👨", "👩‍🦰", "🧑", "👱‍♂️", "🧔", "👧", "👦"];

@@ -357,7 +357,24 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/google/oauth/callback/</pre>
         <div class="page-header flex-between">
           <div>
             <h2>Pessoas Identificadas & Clusters</h2>
-            <p>Rostos agrupados por proximidade vetorial de cosseno ($d \le 0.40$). Atribua nomes para treinar a auto-sugestão.</p>
+            <p>Rostos agrupados por proximidade vetorial de cosseno. Atribua nomes para treinar a auto-sugestão.</p>
+            <div class="album-metrics-row" id="albumMetricsContainerIndex" style="display: none; margin-top: 0.6rem;">
+              <div class="metric-pill" title="Silhouette Score: Mede a coesão interna e a separação dos grupos (-1 a 1)">
+                <span class="metric-dot dot-emerald"></span>
+                <span class="metric-label">Silhouette:</span>
+                <strong class="metric-val text-emerald" id="metricSilhouetteIndex">--</strong>
+              </div>
+              <div class="metric-pill" title="Davies-Bouldin Index: Similaridade média entre clusters (quanto menor, melhor)">
+                <span class="metric-dot dot-cyan"></span>
+                <span class="metric-label">DB Index:</span>
+                <strong class="metric-val text-cyan" id="metricDBIndexIndex">--</strong>
+              </div>
+              <div class="metric-pill" title="Proporção de faces atribuídas a pessoas e grupos válidos">
+                <span class="metric-dot dot-primary"></span>
+                <span class="metric-label">Faces Agrupadas:</span>
+                <strong class="metric-val" id="metricGroupedRatioIndex">--</strong>
+              </div>
+            </div>
           </div>
           <div class="header-actions">
             <select class="form-control select-sm" id="albumSelector">

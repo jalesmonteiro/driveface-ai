@@ -178,6 +178,32 @@ class AlbumClustersListView(APIView):
             elif last_job.status == Job.Status.COMPLETED:
                 progress_pct = 100.0
 
+            # Caso seja um job legado sem métricas computadas, calcula e persiste retroativamente
+            if (not last_job.clustering_metrics or not last_job.clustering_metrics.get("total_faces")) and last_job.status == Job.Status.COMPLETED:
+                try:
+                    from faces.models import Face
+                    all_faces = list(Face.objects.filter(photo__album=album).exclude(embedding__isnull=True))
+                    if len(all_faces) >= 2:
+                        import numpy as np
+                        from vision_pipeline.clustering import FaceClustering
+                        embs = np.array([f.embedding for f in all_faces], dtype=np.float32)
+                        cluster_map = {}
+                        labels = []
+                        for f in all_faces:
+                            if f.cluster_id:
+                                if f.cluster_id not in cluster_map:
+                                    cluster_map[f.cluster_id] = len(cluster_map)
+                                labels.append(cluster_map[f.cluster_id])
+                            else:
+                                labels.append(-1)
+                        lbls = np.array(labels, dtype=int)
+                        clusterer = FaceClustering()
+                        computed_m = clusterer.compute_intrinsic_metrics(embs, lbls)
+                        last_job.clustering_metrics = computed_m
+                        last_job.save(update_fields=["clustering_metrics"])
+                except Exception as e_backfill:
+                    pass
+
             job_info = {
                 "id": str(last_job.id),
                 "status": last_job.status,
@@ -185,6 +211,7 @@ class AlbumClustersListView(APIView):
                 "processed_images": last_job.processed_images,
                 "progress_percentage": progress_pct,
                 "error_message": last_job.error_message,
+                "clustering_metrics": last_job.clustering_metrics or {},
                 "created_at": last_job.created_at.isoformat() if last_job.created_at else None,
                 "started_at": last_job.started_at.isoformat() if last_job.started_at else None,
                 "finished_at": last_job.finished_at.isoformat() if last_job.finished_at else None,
@@ -212,6 +239,7 @@ class AlbumClustersListView(APIView):
             "folder_name": album.folder_name,
             "total_photos": photos.count(),
             "total_people": len(clusters),
+            "clustering_metrics": (last_job.clustering_metrics if last_job else {}) or {},
             "clusters": data,
             "job_status": job_status,
             "job_error": job_error,

@@ -235,10 +235,18 @@ def process_album_task(self, job_id: str = None):
         clusterer = FaceClustering(eps=0.40, min_samples=2)
         cluster_labels = clusterer.fit_predict(embeddings_matrix)
 
+        # Computa métricas intrínsecas de qualidade do agrupamento por álbum (PPgTI / UFRN)
+        try:
+            intrinsic_metrics = clusterer.compute_intrinsic_metrics(embeddings_matrix, cluster_labels)
+        except Exception as e_met:
+            logger.warning(f"Falha ao computar métricas intrínsecas do job {job_id}: {e_met}")
+            intrinsic_metrics = {}
+        job.clustering_metrics = intrinsic_metrics
+
         unique_labels = set(cluster_labels)
         unique_labels.discard(-1)  # remove ruído
 
-        logger.info(f"[Job {job_id}] DBSCAN: {len(unique_labels)} clusters encontrados.")
+        logger.info(f"[Job {job_id}] DBSCAN: {len(unique_labels)} clusters encontrados. Métricas: {intrinsic_metrics}")
 
         # 8. Remove clusters antigos do álbum e cria novos
         album.clusters.all().delete()
@@ -403,7 +411,7 @@ def process_album_task(self, job_id: str = None):
         # 10. Finaliza o Job
         job.status = Job.Status.COMPLETED
         job.finished_at = datetime.now()
-        job.save(update_fields=["status", "finished_at"])
+        job.save(update_fields=["status", "finished_at", "clustering_metrics"])
 
         total_clusters = album.clusters.count()
         logger.info(f"[Job {job_id}] Concluído! {len(all_detections)} faces, {total_clusters} clusters no PostgreSQL.")
@@ -414,6 +422,7 @@ def process_album_task(self, job_id: str = None):
             "total_images": len(photo_objects),
             "total_faces": len(all_detections),
             "total_clusters": total_clusters,
+            "clustering_metrics": getattr(job, "clustering_metrics", {}),
         }
 
     except Exception as exc:

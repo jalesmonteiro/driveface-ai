@@ -79,7 +79,26 @@
           <h2 id="currentAlbumTitle">Nome do Álbum</h2>
           <span class="badge badge-success" id="currentAlbumBadge">0 pessoas</span>
         </div>
-        <p id="currentAlbumMeta" class="text-muted">Rostos agrupados por similaridade de cosseno ($d \le 0.40$). Clique no cartão da pessoa para ver todas as fotos.</p>
+        <p id="currentAlbumMeta" class="text-muted">Rostos agrupados por similaridade de cosseno. Clique no cartão da pessoa para ver todas as fotos.</p>
+        
+        <!-- Métricas Acadêmicas / Qualidade do Agrupamento (Silhouette, DB Index) -->
+        <div class="album-metrics-row" id="albumMetricsContainer" style="display: none;">
+          <div class="metric-pill" title="Silhouette Score: Mede a coesão interna e a separação dos grupos (-1 a 1)">
+            <span class="metric-dot dot-emerald"></span>
+            <span class="metric-label">Silhouette:</span>
+            <strong class="metric-val text-emerald" id="metricSilhouette">--</strong>
+          </div>
+          <div class="metric-pill" title="Davies-Bouldin Index: Similaridade média entre clusters (quanto menor, melhor)">
+            <span class="metric-dot dot-cyan"></span>
+            <span class="metric-label">DB Index:</span>
+            <strong class="metric-val text-cyan" id="metricDBIndex">--</strong>
+          </div>
+          <div class="metric-pill" title="Proporção de faces atribuídas a pessoas e grupos válidos">
+            <span class="metric-dot dot-primary"></span>
+            <span class="metric-label">Faces Agrupadas:</span>
+            <strong class="metric-val" id="metricGroupedRatio">--</strong>
+          </div>
+        </div>
       </div>
     </div>
 
