@@ -8,12 +8,15 @@ from .views import (
     ClusterPhotosListView,
     PhotoStreamView,
     AlbumShareManageView,
+    AlbumShareItemView,
     SharedAlbumDetailView,
+    SharedWithMeAlbumsListView,
     AlbumReprocessView,
 )
 
 urlpatterns = [
     path("", AlbumListView.as_view(), name="album_list"),
+    path("shared-with-me/", SharedWithMeAlbumsListView.as_view(), name="albums_shared_with_me"),
     path("process/", ProcessAlbumView.as_view(), name="album_process"),
     path("<uuid:album_id>/", AlbumDetailView.as_view(), name="album_detail"),
     path("<uuid:album_id>/reprocess/", AlbumReprocessView.as_view(), name="album_reprocess"),
@@ -32,6 +35,11 @@ urlpatterns = [
         "<uuid:album_id>/shares/",
         AlbumShareManageView.as_view(),
         name="album_share_manage",
+    ),
+    path(
+        "<uuid:album_id>/shares/<uuid:share_id>/",
+        AlbumShareItemView.as_view(),
+        name="album_share_item",
     ),
     path(
         "shared/<str:share_token>/",

@@ -1,85 +1,185 @@
 {% extends "base.html" %}
 
-{% block title %}Compartilhamento & Acesso — DriveFace AI{% endblock %}
+{% block title %}Compartilhamento — DriveFace AI{% endblock %}
 
 {% block content %}
 <section class="tab-pane active" id="tab-shares">
   <div class="page-header">
-    <h2>Compartilhamento Seguro & Controle de Acesso (ACL)</h2>
-    <p>Gere links com token seguro e gerencie a lista de e-mails autorizados a visualizar as fotos deste álbum.</p>
+    <div class="header-content">
+      <h2>Compartilhamento & Controle de Acesso</h2>
+      <p>Gerencie quem tem permissão para ver seus álbuns e visualize os álbuns compartilhados com você.</p>
+    </div>
   </div>
 
-  <div class="share-card glass">
-    <div class="form-group">
-      <label for="shareAlbumSelect">Selecione o Álbum para Gerenciar</label>
-      <select class="form-control select-md" id="shareAlbumSelect">
-        <option value="" disabled selected>Carregando álbuns...</option>
-      </select>
+  <!-- Barra de Abas de Navegação -->
+  <div class="share-tabs-nav">
+    <button type="button" class="share-tab-btn active" id="tabBtnSharedWithMe" data-target="tabSharedWithMe">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      Compartilhados Comigo
+      <span class="tab-count-badge" id="badgeSharedCount">0</span>
+    </button>
+    <button type="button" class="share-tab-btn" id="tabBtnManageShares" data-target="tabManageShares">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="18" cy="5" r="3"/>
+        <circle cx="6" cy="12" r="3"/>
+        <circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/>
+        <line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>
+      </svg>
+      Compartilhar Meus Álbuns
+    </button>
+  </div>
+
+  <!-- ====================================================================
+       ABA 1: ÁLBUNS COMPARTILHADOS COMIGO
+       ==================================================================== -->
+  <div class="share-tab-content active" id="tabSharedWithMe">
+    <!-- Loading State -->
+    <div class="drive-loading-state" id="sharedWithMeLoading" style="padding: 3.5rem 1rem;">
+      <div class="drive-spinner"></div>
+      <p style="margin-top: 1rem; color: var(--text-muted);">Buscando álbuns compartilhados com você...</p>
     </div>
 
-    <div class="form-group" style="margin-top: 1.5rem;">
-      <label for="shareUrlInput">Link Seguro de Acesso ao Álbum</label>
-      <div class="copy-input-group">
-        <input type="text" id="shareUrlInput" class="form-control font-mono" readonly value="https://driveface.ai/?shared_token=...">
-        <button class="btn btn-primary" id="btnCopyShareLink">Copiar Link</button>
-      </div>
-      <span class="form-help">Apenas usuários autenticados com e-mails cadastrados na whitelist abaixo poderão abrir este link.</span>
+    <!-- Empty State -->
+    <div class="drive-empty-state glass" id="sharedWithMeEmpty" style="display: none; padding: 3.5rem 1.5rem; text-align: center; border-radius: var(--radius-lg); margin-top: 1rem;">
+      <div style="font-size: 3.5rem; margin-bottom: 1rem;">🤝</div>
+      <h3 style="color: #fff; margin-bottom: 0.5rem;">Nenhum álbum compartilhado ainda</h3>
+      <p class="text-muted" style="max-width: 520px; margin: 0 auto 1.5rem; font-size: 0.95rem; line-height: 1.5;">
+        Quando outro usuário convidar seu e-mail ou enviar um link único de álbum do DriveFace AI, o álbum aparecerá automaticamente nesta grade.
+      </p>
     </div>
 
-    <div class="divider" style="margin: 2rem 0; height: 1px; background: var(--border-glass);"></div>
+    <!-- Grade de Álbuns Compartilhados Comigo -->
+    <div class="albums-grid" id="sharedWithMeGrid" style="display: none; margin-top: 1rem;"></div>
+  </div>
 
-    <div class="whitelist-manager">
-      <h3>Lista de Acesso Autorizado (Whitelist)</h3>
-      <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.85rem;">Adicione endereços de e-mail do Google para autorizar a visualização das pessoas identificadas neste álbum.</p>
-
-      <div class="whitelist-add-box" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
-        <input type="email" id="newWhitelistEmail" class="form-control" placeholder="convidado@gmail.com" style="max-width: 380px;">
-        <button class="btn btn-secondary" id="btnAddWhitelistEmail">Adicionar Convidado</button>
+  <!-- ====================================================================
+       ABA 2: GERENCIAR COMPARTILHAMENTO DE MEUS ÁLBUNS
+       ==================================================================== -->
+  <div class="share-tab-content" id="tabManageShares" style="display: none;">
+    
+    <!-- Seletor de Álbum -->
+    <div class="share-card glass" style="margin-bottom: 1.5rem;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="shareAlbumSelect" style="display: flex; align-items: center; justify-content: space-between; font-weight: 600;">
+          <span>Selecione o Álbum para Gerenciar o Acesso</span>
+          <span id="albumShareBadgeStatus" class="badge badge-success" style="display: none;">Link Ativo</span>
+        </label>
+        <select class="form-control select-md" id="shareAlbumSelect">
+          <option value="" disabled selected>Carregando seus álbuns...</option>
+        </select>
       </div>
+    </div>
 
-      <div class="whitelist-list" id="whitelistContainer">
-        <div class="whitelist-item">
-          <span class="email-text" id="ownerEmailItem">proprietario@driveface.ai</span>
-          <span class="badge badge-success">Proprietário</span>
+    <!-- Empty State se não houver álbuns próprios -->
+    <div class="drive-empty-state glass" id="noMyAlbumsMsg" style="display: none; padding: 3rem 1.5rem; text-align: center; border-radius: var(--radius-lg);">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">📁</div>
+      <h3 style="color: #fff; margin-bottom: 0.5rem;">Você ainda não tem álbuns para compartilhar</h3>
+      <p class="text-muted" style="max-width: 480px; margin: 0 auto 1.5rem; font-size: 0.95rem;">
+        Processe uma pasta do Google Drive primeiro para gerar agrupamentos e compartilhar com outras pessoas.
+      </p>
+      <a href="/process/" class="btn btn-primary btn-md">Processar Pasta</a>
+    </div>
+
+    <!-- Painel de Detalhes e ACL do Álbum Selecionado -->
+    <div id="selectedAlbumSharePanel" style="display: none;">
+      
+      <!-- Cartão do Link Seguro -->
+      <div class="share-card glass" style="margin-bottom: 1.5rem;">
+        <div class="share-link-header flex-between" style="margin-bottom: 1rem;">
+          <div>
+            <h3 style="font-size: 1.15rem; margin-bottom: 0.25rem;">Link Único de Compartilhamento</h3>
+            <p class="text-muted" style="font-size: 0.88rem; margin: 0;">
+              Cada álbum possui um endereço exclusivo. Ao acessar o link, o usuário é adicionado à lista automaticamente.
+            </p>
+          </div>
+          <div class="share-toggle-box">
+            <label class="switch-label" title="Ativar ou suspender o acesso ao link">
+              <input type="checkbox" id="checkShareActive" checked>
+              <span class="switch-slider"></span>
+              <span class="switch-text" id="shareActiveStatusText">Ativo</span>
+            </label>
+          </div>
         </div>
+
+        <div class="copy-input-group">
+          <input type="text" id="shareUrlInput" class="form-control font-mono" readonly value="">
+          <button class="btn btn-primary" id="btnCopyShareLink">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            Copiar Link
+          </button>
+        </div>
+        <span class="form-help" style="margin-top: 0.5rem; display: block;">
+          🔒 O visitante precisa estar autenticado no DriveFace AI. Se você bloquear o e-mail dele, ele não conseguirá acessar mesmo tendo este link.
+        </span>
       </div>
+
+      <!-- Gerenciador de Lista de Acesso (Whitelist & Blacklist) -->
+      <div class="share-card glass">
+        <div class="flex-between" style="margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.15rem; margin-bottom: 0.25rem;">Lista de Acesso do Álbum</h3>
+            <p class="text-muted" style="font-size: 0.88rem; margin: 0;">
+              Controle individual: autorize por e-mail, acompanhe quem entrou pelo link ou bloqueie acessos indesejados.
+            </p>
+          </div>
+        </div>
+
+        <!-- Formulário para Convidar ou Bloquear e-mail -->
+        <div class="acl-action-form glass" style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 1.75rem; border: 1px solid rgba(255,255,255,0.08);">
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.88rem; font-weight: 600;">Adicionar / Gerenciar E-mail de Acesso:</label>
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <input type="email" id="inputAclEmail" class="form-control" placeholder="digite o e-mail (ex: convidado@gmail.com)" style="flex: 1; min-width: 260px;">
+            <button class="btn btn-primary" id="btnInviteByEmail" title="Autorizar convidado por e-mail">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Convidar por E-mail
+            </button>
+            <button class="btn btn-outline-danger" id="btnBlockByEmail" title="Bloquear este e-mail impedindo qualquer acesso">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"/></svg>
+              Bloquear Acesso
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabela / Lista de Usuários com Acesso -->
+        <div class="acl-table-container">
+          <table class="acl-table" id="aclTable">
+            <thead>
+              <tr>
+                <th>Usuário / E-mail</th>
+                <th>Tipo de Acesso</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th style="text-align: right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="aclTableBody">
+              <!-- Renderizado dinamicamente -->
+            </tbody>
+          </table>
+          <div id="aclEmptyState" style="display: none; padding: 2rem; text-align: center; color: var(--text-muted);">
+            Nenhum convidado adicionado a este álbum ainda. Compartilhe o link acima ou convide por e-mail.
+          </div>
+        </div>
+
+      </div>
+
     </div>
+
   </div>
 </section>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-document.addEventListener("DOMContentLoaded", async () => {
-  const token = localStorage.getItem("df_access_token");
-  const select = document.getElementById("shareAlbumSelect");
-  const shareInput = document.getElementById("shareUrlInput");
-
-  if (!token) return;
-
-  try {
-    const res = await fetch("/api/v1/albums/", {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const albums = await res.json();
-      if (albums && albums.length > 0) {
-        select.innerHTML = albums.map(a => `<option value="${a.id}" data-token="${a.share_token}">${a.folder_name}</option>`).join("");
-        shareInput.value = `${window.location.origin}/?shared_token=${albums[0].share_token}`;
-
-        select.addEventListener("change", () => {
-          const opt = select.options[select.selectedIndex];
-          const st = opt.getAttribute("data-token");
-          if (st) {
-            shareInput.value = `${window.location.origin}/?shared_token=${st}`;
-          }
-        });
-      } else {
-        select.innerHTML = '<option value="" disabled selected>Nenhum álbum processado ainda</option>';
-      }
-    }
-  } catch (e) {
-    console.error(e);
+document.addEventListener("DOMContentLoaded", () => {
+  if (typeof initSharesPage === "function") {
+    initSharesPage();
   }
 });
 </script>

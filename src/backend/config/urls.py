@@ -41,6 +41,16 @@ def shares_view(request):
     return render(request, "shares.html", {"active_page": "shares"})
 
 
+def share_link_web_view(request, share_token):
+    """
+    Acesso direto com 1 clique ao link único do álbum: /share/<share_token>/
+    Redireciona para /albums/?share_token=<share_token> para processamento imediato
+    de autenticação JWT e auto-adição à whitelist no frontend.
+    """
+    from django.shortcuts import redirect
+    return redirect(f"/albums/?share_token={share_token}")
+
+
 def api_root_view(request):
     return JsonResponse(
         {
@@ -71,6 +81,7 @@ urlpatterns = [
         name="person_gallery",
     ),
     path("shares/", shares_view, name="shares"),
+    path("share/<str:share_token>/", share_link_web_view, name="share_link_web"),
 
     # APIs RESTful
     path("api/", api_root_view, name="api-root"),

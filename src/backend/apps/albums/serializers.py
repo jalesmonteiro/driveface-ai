@@ -46,7 +46,20 @@ class JobStatusSerializer(serializers.ModelSerializer):
 
 
 class AlbumShareSerializer(serializers.ModelSerializer):
+    invite_type_display = serializers.CharField(source="get_invite_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
     class Meta:
         model = AlbumShare
-        fields = ("id", "invited_email", "role", "invited_at")
-        read_only_fields = ("id", "role", "invited_at")
+        fields = (
+            "id",
+            "invited_email",
+            "role",
+            "invite_type",
+            "invite_type_display",
+            "status",
+            "status_display",
+            "invited_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "role", "invited_at", "updated_at")

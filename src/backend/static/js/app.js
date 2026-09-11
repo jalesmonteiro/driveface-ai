@@ -162,6 +162,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // Limpa os parâmetros da URL sem recarregar
       window.history.replaceState({}, document.title, window.location.pathname);
       showToast(`Login realizado com sucesso via Google! Olá, ${name}.`, "success");
+
+      const pendingShare = sessionStorage.getItem("df_pending_share_token");
+      if (pendingShare) {
+        sessionStorage.removeItem("df_pending_share_token");
+        window.location.href = `/albums/?share_token=${pendingShare}`;
+        return;
+      }
     } else if (authError) {
       window.history.replaceState({}, document.title, window.location.pathname);
       showToast(`Erro na autenticação do Google: ${authError}`, "error");
@@ -263,6 +270,13 @@ document.addEventListener("DOMContentLoaded", () => {
         localStorage.setItem("df_user", JSON.stringify(data.user));
         renderAuthState();
         showToast("Login de demonstração ativado com sucesso!", "success");
+
+        const pendingShare = sessionStorage.getItem("df_pending_share_token");
+        if (pendingShare) {
+          sessionStorage.removeItem("df_pending_share_token");
+          window.location.href = `/albums/?share_token=${pendingShare}`;
+          return;
+        }
 
         if (window.location.pathname.startsWith("/albums/")) {
           const urlParams = new URLSearchParams(window.location.search);
@@ -674,7 +688,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (albumsView) albumsView.style.display = "none";
     if (albumDetailView) albumDetailView.style.display = "block";
 
-    if (currentAlbumTitle) currentAlbumTitle.innerText = albumName || "Álbum";
+    const currentAlb = (state.albums || []).find(a => a.id === albumId);
+    const isOwner = currentAlb ? (currentAlb.is_owner !== false) : true;
+
+    if (btnDeleteCurrentAlbum) btnDeleteCurrentAlbum.style.display = isOwner ? "inline-flex" : "none";
+    if (btnReprocessCurrentAlbum) btnReprocessCurrentAlbum.style.display = isOwner ? "inline-flex" : "none";
+    if (btnShareCurrentAlbum) btnShareCurrentAlbum.style.display = isOwner ? "inline-flex" : "none";
+
+    let displayName = albumName || (currentAlb ? currentAlb.folder_name : "Álbum");
+    if (!isOwner && currentAlb && currentAlb.owner_name) {
+      displayName += ` (De: ${currentAlb.owner_name})`;
+    }
+
+    if (currentAlbumTitle) currentAlbumTitle.innerText = displayName;
     if (currentAlbumBadge) currentAlbumBadge.innerText = `${totalClusters} pessoas`;
 
     await loadAlbumClusters(albumId);
@@ -697,14 +723,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   btnShareCurrentAlbum?.addEventListener("click", () => {
-    const currentAlbum = (state.albums || []).find(a => a.id === state.currentAlbumId);
-    if (currentAlbum && currentAlbum.share_token) {
-      const shareUrl = `${window.location.origin}/?shared_token=${currentAlbum.share_token}`;
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        showToast("Link de compartilhamento copiado!", "success");
-      }).catch(() => {
-        prompt("Copie o link de compartilhamento:", shareUrl);
-      });
+    if (state.currentAlbumId) {
+      window.location.href = `/shares/?album_id=${state.currentAlbumId}`;
     } else {
       window.location.href = "/shares/";
     }
@@ -749,6 +769,19 @@ document.addEventListener("DOMContentLoaded", () => {
             ? `<img src="${alb.cover_url}" alt="${alb.folder_name}" loading="lazy" />`
             : `<div class="album-cover-placeholder"><span>📁</span><small class="text-muted">Álbum Google Drive</small></div>`;
 
+          const isOwner = alb.is_owner !== false;
+          const ownerBadge = !isOwner
+            ? `<span class="badge-link" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;">🤝 De: ${alb.owner_name}</span>`
+            : "";
+
+          const deleteBtn = isOwner
+            ? `
+              <button type="button" class="btn-icon btn-card-delete" data-id="${alb.id}" data-name="${alb.folder_name}" title="Excluir álbum">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              </button>
+            `
+            : "";
+
           return `
             <div class="album-card glass" data-id="${alb.id}" data-name="${alb.folder_name}" data-clusters="${alb.total_clusters || 0}" title="Clique para abrir este álbum">
               <div class="album-card-cover">
@@ -760,10 +793,9 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="album-card-body">
                 <div class="album-card-header">
                   <h3 class="album-card-title" title="${alb.folder_name}">${alb.folder_name}</h3>
-                  <button type="button" class="btn-icon btn-card-delete" data-id="${alb.id}" data-name="${alb.folder_name}" title="Excluir álbum">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                  </button>
+                  ${deleteBtn}
                 </div>
+                ${ownerBadge ? `<div style="margin-bottom: 0.4rem;">${ownerBadge}</div>` : ""}
                 <div class="album-card-meta">
                   <span class="badge badge-cyan">${alb.total_photos || 0} fotos</span>
                   <span class="badge badge-success">${alb.total_clusters || 0} pessoas</span>
@@ -817,11 +849,56 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Valida e auto-adiciona o usuário logado via link compartilhado (?share_token=...)
+  async function handleUrlShareToken(tokenParam = null) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareToken = tokenParam || urlParams.get("share_token");
+    if (!shareToken) return false;
+
+    if (!state.token) {
+      sessionStorage.setItem("df_pending_share_token", shareToken);
+      showToast("Faça login com sua conta Google para acessar este álbum compartilhado.", "warning");
+      return false;
+    }
+
+    try {
+      showToast("Validando acesso ao álbum...", "info");
+      const res = await (window.authFetch || fetch)(`/api/v1/albums/shared/${shareToken}/`);
+      if (res.ok) {
+        const data = await res.json();
+        sessionStorage.removeItem("df_pending_share_token");
+        showToast(`Acesso concedido ao álbum "${data.folder_name}"!`, "success");
+
+        // Remove share_token da URL sem recarregar a página
+        window.history.replaceState({}, document.title, `/albums/?album_id=${data.album_id}`);
+
+        await loadAlbumsGrid();
+        openAlbumDetail(data.album_id, data.folder_name, (data.clusters || []).length);
+        return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        sessionStorage.removeItem("df_pending_share_token");
+        showToast(errData.detail || "Não foi possível acessar o álbum compartilhado.", "error");
+        await loadAlbumsGrid();
+        return false;
+      }
+    } catch (err) {
+      console.error("Erro ao validar share_token:", err);
+      return false;
+    }
+  }
+
   // Inicializador principal da página de álbuns
   window.initAlbumsPage = async function(targetAlbumId = null) {
     const urlParams = new URLSearchParams(window.location.search);
-    const desiredId = targetAlbumId || urlParams.get("album_id");
+    const shareToken = urlParams.get("share_token");
 
+    if (shareToken) {
+      const handled = await handleUrlShareToken(shareToken);
+      if (handled) return;
+    }
+
+    const desiredId = targetAlbumId || urlParams.get("album_id");
     await loadAlbumsGrid();
 
     if (desiredId) {
@@ -1547,8 +1624,461 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  // ==========================================================================
+  // SISTEMA DE COMPARTILHAMENTO & ACL (CONTROLE DE ACESSO POR ÁLBUM)
+  // ==========================================================================
+  async function initSharesPage() {
+    const tabSharesRoot = document.getElementById("tab-shares");
+    if (!tabSharesRoot) return;
+
+    const tabBtnSharedWithMe = document.getElementById("tabBtnSharedWithMe");
+    const tabBtnManageShares = document.getElementById("tabBtnManageShares");
+    const tabSharedWithMe = document.getElementById("tabSharedWithMe");
+    const tabManageShares = document.getElementById("tabManageShares");
+    const badgeSharedCount = document.getElementById("badgeSharedCount");
+
+    const sharedWithMeLoading = document.getElementById("sharedWithMeLoading");
+    const sharedWithMeEmpty = document.getElementById("sharedWithMeEmpty");
+    const sharedWithMeGrid = document.getElementById("sharedWithMeGrid");
+
+    const shareAlbumSelect = document.getElementById("shareAlbumSelect");
+    const albumShareBadgeStatus = document.getElementById("albumShareBadgeStatus");
+    const noMyAlbumsMsg = document.getElementById("noMyAlbumsMsg");
+    const selectedAlbumSharePanel = document.getElementById("selectedAlbumSharePanel");
+    const shareUrlInput = document.getElementById("shareUrlInput");
+    const btnCopyShareLink = document.getElementById("btnCopyShareLink");
+    const checkShareActive = document.getElementById("checkShareActive");
+    const shareActiveStatusText = document.getElementById("shareActiveStatusText");
+    const inputAclEmail = document.getElementById("inputAclEmail");
+    const btnInviteByEmail = document.getElementById("btnInviteByEmail");
+    const btnBlockByEmail = document.getElementById("btnBlockByEmail");
+    const aclTableBody = document.getElementById("aclTableBody");
+    const aclEmptyState = document.getElementById("aclEmptyState");
+
+    let currentSelectedAlbumId = null;
+
+    function switchTab(targetId) {
+      if (targetId === "tabSharedWithMe") {
+        tabBtnSharedWithMe?.classList.add("active");
+        tabBtnManageShares?.classList.remove("active");
+        if (tabSharedWithMe) tabSharedWithMe.style.display = "block";
+        if (tabManageShares) tabManageShares.style.display = "none";
+        loadSharedWithMe();
+      } else {
+        tabBtnManageShares?.classList.add("active");
+        tabBtnSharedWithMe?.classList.remove("active");
+        if (tabManageShares) tabManageShares.style.display = "block";
+        if (tabSharedWithMe) tabSharedWithMe.style.display = "none";
+        if (!shareAlbumSelect.value || shareAlbumSelect.options.length <= 1) {
+          loadMyAlbums();
+        }
+      }
+    }
+
+    tabBtnSharedWithMe?.addEventListener("click", () => switchTab("tabSharedWithMe"));
+    tabBtnManageShares?.addEventListener("click", () => switchTab("tabManageShares"));
+
+    // Carrega álbuns compartilhados comigo
+    async function loadSharedWithMe() {
+      if (sharedWithMeLoading) sharedWithMeLoading.style.display = "block";
+      if (sharedWithMeEmpty) sharedWithMeEmpty.style.display = "none";
+      if (sharedWithMeGrid) sharedWithMeGrid.style.display = "none";
+
+      try {
+        const res = await (window.authFetch || fetch)("/api/v1/albums/shared-with-me/");
+        if (res.ok) {
+          const albums = await res.json();
+          if (badgeSharedCount) badgeSharedCount.innerText = albums.length;
+
+          if (sharedWithMeLoading) sharedWithMeLoading.style.display = "none";
+
+          if (!albums || albums.length === 0) {
+            if (sharedWithMeEmpty) sharedWithMeEmpty.style.display = "block";
+            return;
+          }
+
+          if (sharedWithMeGrid) {
+            sharedWithMeGrid.style.display = "grid";
+            sharedWithMeGrid.innerHTML = albums.map(alb => {
+              const coverHtml = alb.cover_url
+                ? `<img src="${alb.cover_url}" alt="${alb.folder_name}" loading="lazy" />`
+                : `<div class="album-cover-placeholder"><span>📁</span><small class="text-muted">Álbum Compartilhado</small></div>`;
+
+              const inviteBadge = alb.user_invite_type === "EMAIL"
+                ? `<span class="badge-email">✉️ Convidado por e-mail</span>`
+                : `<span class="badge-link">🔗 Convidado por link</span>`;
+
+              const ownerName = alb.owner_name || alb.owner_email || "Usuário";
+
+              return `
+                <div class="album-card glass" data-id="${alb.id}">
+                  <div class="album-card-cover">
+                    ${coverHtml}
+                    <div class="album-card-overlay">
+                      <a href="/albums/?album_id=${alb.id}" class="btn btn-primary btn-sm">Abrir Álbum &rarr;</a>
+                    </div>
+                  </div>
+                  <div class="album-card-body">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; gap: 0.5rem;">
+                      <h4 class="album-card-title" title="${alb.folder_name}">${alb.folder_name}</h4>
+                      ${inviteBadge}
+                    </div>
+                    <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.75rem;">
+                      De: <strong>${ownerName}</strong>
+                    </p>
+                    <div class="album-card-stats">
+                      <span>👥 ${alb.total_clusters || 0} pessoas</span>
+                      <span>📷 ${alb.total_photos || 0} fotos</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join("");
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar compartilhados comigo:", err);
+        if (sharedWithMeLoading) sharedWithMeLoading.style.display = "none";
+        if (sharedWithMeEmpty) sharedWithMeEmpty.style.display = "block";
+      }
+    }
+
+    // Carrega meus próprios álbuns para gerenciamento de compartilhamento
+    async function loadMyAlbums(preselectAlbumId = null) {
+      try {
+        const res = await (window.authFetch || fetch)("/api/v1/albums/?only_owned=true");
+        if (res.ok) {
+          const albums = await res.json();
+          if (!albums || albums.length === 0) {
+            if (noMyAlbumsMsg) noMyAlbumsMsg.style.display = "block";
+            if (selectedAlbumSharePanel) selectedAlbumSharePanel.style.display = "none";
+            if (shareAlbumSelect) shareAlbumSelect.innerHTML = '<option value="" disabled selected>Nenhum álbum processado ainda</option>';
+            return;
+          }
+
+          if (noMyAlbumsMsg) noMyAlbumsMsg.style.display = "none";
+          if (selectedAlbumSharePanel) selectedAlbumSharePanel.style.display = "block";
+
+          if (shareAlbumSelect) {
+            shareAlbumSelect.innerHTML = albums.map(a => 
+              `<option value="${a.id}" ${preselectAlbumId && preselectAlbumId === a.id ? 'selected' : ''}>${a.folder_name}</option>`
+            ).join("");
+
+            currentSelectedAlbumId = preselectAlbumId && albums.some(a => a.id === preselectAlbumId)
+              ? preselectAlbumId
+              : albums[0].id;
+            
+            shareAlbumSelect.value = currentSelectedAlbumId;
+            await loadAlbumAcl(currentSelectedAlbumId);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar álbuns para compartilhamento:", err);
+      }
+    }
+
+    // Carrega a ACL de um álbum específico
+    async function loadAlbumAcl(albumId) {
+      if (!albumId) return;
+      currentSelectedAlbumId = albumId;
+
+      try {
+        const res = await (window.authFetch || fetch)(`/api/v1/albums/${albumId}/shares/`);
+        if (res.ok) {
+          const data = await res.json();
+
+          // Atualiza link de compartilhamento
+          const shareUrl = `${window.location.origin}/share/${data.share_token}/`;
+          if (shareUrlInput) shareUrlInput.value = shareUrl;
+
+          // Atualiza toggle de status
+          if (checkShareActive) checkShareActive.checked = !!data.is_share_active;
+          if (shareActiveStatusText) shareActiveStatusText.innerText = data.is_share_active ? "Ativo" : "Suspenso";
+
+          if (albumShareBadgeStatus) {
+            albumShareBadgeStatus.style.display = "inline-block";
+            albumShareBadgeStatus.innerText = data.is_share_active ? "Link Ativo" : "Link Suspenso";
+            albumShareBadgeStatus.className = data.is_share_active ? "badge badge-success" : "badge badge-danger";
+          }
+
+          renderAclTable(albumId, data);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar ACL do álbum:", err);
+      }
+    }
+
+    // Renderiza tabela de usuários com acesso
+    function renderAclTable(albumId, data) {
+      if (!aclTableBody) return;
+      aclTableBody.innerHTML = "";
+
+      // 1. Linha do Proprietário
+      const ownerRow = document.createElement("tr");
+      ownerRow.innerHTML = `
+        <td>
+          <div class="acl-user-cell">
+            <div class="acl-user-avatar" style="background: var(--primary-gradient);">👑</div>
+            <div>
+              <strong>${data.owner?.name || data.owner?.email}</strong>
+              <div class="text-muted" style="font-size: 0.78rem;">${data.owner?.email}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="badge-owner">👑 Proprietário</span></td>
+        <td><span class="badge-active">Ativo</span></td>
+        <td class="text-muted" style="font-size: 0.82rem;">Criador</td>
+        <td style="text-align: right;"><span class="text-muted" style="font-size: 0.78rem;">Controle Total</span></td>
+      `;
+      aclTableBody.appendChild(ownerRow);
+
+      const shares = data.shares || [];
+      if (shares.length === 0) {
+        if (aclEmptyState) aclEmptyState.style.display = "block";
+      } else {
+        if (aclEmptyState) aclEmptyState.style.display = "none";
+        shares.forEach(s => {
+          const tr = document.createElement("tr");
+          const initial = (s.invited_email || "?").charAt(0).toUpperCase();
+
+          let typeBadge = "";
+          if (s.invite_type === "EMAIL") {
+            typeBadge = `<span class="badge-email">✉️ Convidado por e-mail</span>`;
+          } else if (s.invite_type === "LINK") {
+            typeBadge = `<span class="badge-link">🔗 Convidado por link</span>`;
+          } else {
+            typeBadge = `<span class="badge-blocked">🚫 Bloqueio Direto</span>`;
+          }
+
+          const statusBadge = s.status === "ACTIVE"
+            ? `<span class="badge-active">Ativo</span>`
+            : `<span class="badge-blocked">Bloqueado</span>`;
+
+          const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString("pt-BR") : "-";
+
+          const actionButtons = s.status === "ACTIVE"
+            ? `
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="window.handleToggleBlock('${albumId}', '${s.id}', 'BLOCKED')" title="Bloquear acesso deste usuário">
+                Bloquear
+              </button>
+              <button type="button" class="btn-icon text-muted" onclick="window.handleDeleteShare('${albumId}', '${s.id}', '${s.invited_email}')" title="Remover da lista" style="font-size: 1.25rem;">
+                &times;
+              </button>
+            `
+            : `
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.handleToggleBlock('${albumId}', '${s.id}', 'ACTIVE')" title="Desbloquear acesso deste usuário">
+                Desbloquear
+              </button>
+              <button type="button" class="btn-icon text-muted" onclick="window.handleDeleteShare('${albumId}', '${s.id}', '${s.invited_email}')" title="Remover da lista" style="font-size: 1.25rem;">
+                &times;
+              </button>
+            `;
+
+          tr.innerHTML = `
+            <td>
+              <div class="acl-user-cell">
+                <div class="acl-user-avatar">${initial}</div>
+                <div>
+                  <strong>${s.invited_email}</strong>
+                </div>
+              </div>
+            </td>
+            <td>${typeBadge}</td>
+            <td>${statusBadge}</td>
+            <td class="text-muted" style="font-size: 0.82rem;">${dateStr}</td>
+            <td style="text-align: right;">
+              <div class="acl-actions-cell">${actionButtons}</div>
+            </td>
+          `;
+          aclTableBody.appendChild(tr);
+        });
+      }
+    }
+
+    // Seleção de outro álbum
+    shareAlbumSelect?.addEventListener("change", (e) => {
+      loadAlbumAcl(e.target.value);
+    });
+
+    // Copiar link de compartilhamento diretamente sem prompt
+    btnCopyShareLink?.addEventListener("click", () => {
+      if (!shareUrlInput || !shareUrlInput.value) return;
+      const text = shareUrlInput.value;
+
+      shareUrlInput.select();
+      shareUrlInput.setSelectionRange(0, 99999);
+
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (err) {
+        copied = false;
+      }
+
+      if (!copied && navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        copied = true;
+      }
+
+      if (btnCopyShareLink) {
+        const origText = btnCopyShareLink.innerHTML;
+        btnCopyShareLink.innerHTML = "✓ Link Copiado!";
+        btnCopyShareLink.style.background = "#10b981";
+        setTimeout(() => {
+          btnCopyShareLink.innerHTML = origText;
+          btnCopyShareLink.style.background = "";
+        }, 2200);
+      }
+
+      showToast("Link copiado para a área de transferência!", "success");
+    });
+
+    // Toggle ativar/suspender link
+    checkShareActive?.addEventListener("change", async (e) => {
+      if (!currentSelectedAlbumId) return;
+      const isActive = e.target.checked;
+      try {
+        const res = await (window.authFetch || fetch)(`/api/v1/albums/${currentSelectedAlbumId}/shares/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "TOGGLE_ACTIVE", is_share_active: isActive })
+        });
+        if (res.ok) {
+          showToast(isActive ? "Compartilhamento ativado!" : "Compartilhamento suspenso!", "success");
+          if (shareActiveStatusText) shareActiveStatusText.innerText = isActive ? "Ativo" : "Suspenso";
+          if (albumShareBadgeStatus) {
+            albumShareBadgeStatus.innerText = isActive ? "Link Ativo" : "Link Suspenso";
+            albumShareBadgeStatus.className = isActive ? "badge badge-success" : "badge badge-danger";
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao alterar status do link:", err);
+      }
+    });
+
+    // Convidar por e-mail
+    btnInviteByEmail?.addEventListener("click", async () => {
+      if (!currentSelectedAlbumId) return;
+      const email = inputAclEmail ? inputAclEmail.value.trim() : "";
+      if (!email || !email.includes("@")) {
+        showToast("Digite um endereço de e-mail válido.", "error");
+        return;
+      }
+
+      try {
+        btnInviteByEmail.disabled = true;
+        const res = await (window.authFetch || fetch)(`/api/v1/albums/${currentSelectedAlbumId}/shares/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "INVITE_EMAIL", email: email })
+        });
+        if (res.ok) {
+          showToast(`Convite por e-mail adicionado para ${email}!`, "success");
+          if (inputAclEmail) inputAclEmail.value = "";
+          await loadAlbumAcl(currentSelectedAlbumId);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          showToast(errData.detail || "Erro ao adicionar convite por e-mail.", "error");
+        }
+      } catch (err) {
+        showToast("Erro de conexão ao convidar e-mail.", "error");
+      } finally {
+        btnInviteByEmail.disabled = false;
+      }
+    });
+
+    // Bloquear e-mail (Blacklist)
+    btnBlockByEmail?.addEventListener("click", async () => {
+      if (!currentSelectedAlbumId) return;
+      const email = inputAclEmail ? inputAclEmail.value.trim() : "";
+      if (!email || !email.includes("@")) {
+        showToast("Digite um endereço de e-mail válido para bloquear.", "error");
+        return;
+      }
+
+      try {
+        btnBlockByEmail.disabled = true;
+        const res = await (window.authFetch || fetch)(`/api/v1/albums/${currentSelectedAlbumId}/shares/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "BLOCK_EMAIL", email: email })
+        });
+        if (res.ok) {
+          showToast(`E-mail ${email} bloqueado! Não poderá acessar este álbum.`, "success");
+          if (inputAclEmail) inputAclEmail.value = "";
+          await loadAlbumAcl(currentSelectedAlbumId);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          showToast(errData.detail || "Erro ao bloquear e-mail.", "error");
+        }
+      } catch (err) {
+        showToast("Erro de conexão ao bloquear e-mail.", "error");
+      } finally {
+        btnBlockByEmail.disabled = false;
+      }
+    });
+
+    // Window global action handlers
+    window.handleToggleBlock = async (albumId, shareId, newStatus) => {
+      try {
+        const res = await (window.authFetch || fetch)(`/api/v1/albums/${albumId}/shares/${shareId}/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+          showToast(newStatus === "BLOCKED" ? "Usuário bloqueado!" : "Usuário desbloqueado!", "success");
+          await loadAlbumAcl(albumId);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          showToast(errData.detail || "Erro ao alterar status.", "error");
+        }
+      } catch (err) {
+        showToast("Erro ao comunicar com o servidor.", "error");
+      }
+    };
+
+    window.handleDeleteShare = async (albumId, shareId, email) => {
+      if (!confirm(`Deseja remover ${email} da lista de acesso deste álbum?`)) return;
+      try {
+        const res = await (window.authFetch || fetch)(`/api/v1/albums/${albumId}/shares/${shareId}/`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          showToast(`Acesso de ${email} removido.`, "success");
+          await loadAlbumAcl(albumId);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          showToast(errData.detail || "Erro ao remover acesso.", "error");
+        }
+      } catch (err) {
+        showToast("Erro ao comunicar com o servidor.", "error");
+      }
+    };
+
+    // Leitura inicial de parâmetros da URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetAlbumId = urlParams.get("album_id");
+    const targetTab = urlParams.get("tab");
+
+    if (targetAlbumId || targetTab === "manage") {
+      switchTab("tabManageShares");
+      await loadMyAlbums(targetAlbumId);
+      loadSharedWithMe();
+    } else {
+      switchTab("tabSharedWithMe");
+    }
+  }
+
+  window.initSharesPage = initSharesPage;
+
   // Inicializa o modal do Drive
   drivePicker.init();
+
+  // Se estiver na página de compartilhamento, inicializa
+  if (document.getElementById("tab-shares")) {
+    initSharesPage();
+  }
 
   // Init
   checkUrlAuthCallback();

@@ -2567,5 +2567,284 @@ body {
   color: var(--text-muted);
 }
 
+/* ====================================================================
+   SISTEMA DE COMPARTILHAMENTO & ACL
+   ==================================================================== */
+
+.share-tabs-nav {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-glass);
+  padding-bottom: 0.75rem;
+}
+
+.share-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.share-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.share-tab-btn.active {
+  color: #fff;
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+}
+
+.tab-count-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.share-tab-btn.active .tab-count-badge {
+  background: var(--primary-gradient);
+  color: #fff;
+}
+
+.share-card {
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  border: 1px solid var(--border-glass);
+}
+
+/* Switch Toggle */
+.share-toggle-box {
+  display: flex;
+  align-items: center;
+}
+
+.switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch-label input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.switch-slider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background-color: #334155;
+  border-radius: 24px;
+  transition: var(--transition-smooth);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: var(--transition-smooth);
+}
+
+.switch-label input:checked + .switch-slider {
+  background: var(--primary-gradient);
+}
+
+.switch-label input:checked + .switch-slider:before {
+  transform: translateX(20px);
+}
+
+.switch-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Tabela de ACL */
+.acl-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.acl-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.acl-table th {
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.acl-table td {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  vertical-align: middle;
+}
+
+.acl-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.acl-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.acl-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.acl-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Badges Específicas de Compartilhamento */
+.badge-owner {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.badge-email {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.badge-link {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.badge-active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.badge-blocked {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.btn-outline-danger {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: var(--transition-smooth);
+}
+
+.btn-outline-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.btn-outline-secondary {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-outline-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+
 
 

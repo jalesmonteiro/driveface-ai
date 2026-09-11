@@ -18,7 +18,22 @@ class AlbumListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        albums = Album.objects.filter(owner=request.user).order_by("-created_at")
+        user_email = (request.user.email or "").strip().lower()
+        only_owned = request.query_params.get("only_owned") in ("true", "1")
+        from django.db.models import Q
+
+        if only_owned:
+            albums = Album.objects.filter(owner=request.user).order_by("-created_at")
+        else:
+            albums = Album.objects.filter(
+                Q(owner=request.user) |
+                Q(
+                    shares__invited_email__iexact=user_email,
+                    shares__status=AlbumShare.Status.ACTIVE,
+                    is_share_active=True,
+                )
+            ).distinct().order_by("-created_at")
+
         data = []
         for alb in albums:
             cover_url = ""
@@ -35,6 +50,9 @@ class AlbumListView(generics.ListAPIView):
                 if first_photo:
                     cover_url = f"/api/v1/photos/{first_photo.id}/stream/"
 
+            is_owner = (alb.owner == request.user)
+            owner_name = getattr(alb.owner, "full_name", None) or alb.owner.email
+
             data.append({
                 "id": str(alb.id),
                 "folder_name": alb.folder_name,
@@ -44,6 +62,9 @@ class AlbumListView(generics.ListAPIView):
                 "cover_url": cover_url,
                 "share_token": alb.share_token,
                 "is_share_active": alb.is_share_active,
+                "is_owner": is_owner,
+                "owner_name": owner_name,
+                "owner_email": alb.owner.email,
                 "created_at": alb.created_at.isoformat(),
             })
         return Response(data)
@@ -344,52 +365,259 @@ class AlbumDetailView(generics.RetrieveDestroyAPIView):
 
 
 class AlbumShareManageView(APIView):
+    """
+    GET /api/v1/albums/<album_id>/shares/
+    Retorna link seguro do álbum, status e lista completa de acessos (Proprietário, Convidados e Bloqueados).
+
+    POST /api/v1/albums/<album_id>/shares/
+    Permite:
+    - Convidar e-mail (action='INVITE_EMAIL' ou invited_emails=[...])
+    - Bloquear e-mail na blacklist (action='BLOCK_EMAIL')
+    - Alternar is_share_active (true/false)
+    """
     permission_classes = [permissions.IsAuthenticated, IsAlbumOwner]
+
+    def get(self, request, album_id):
+        album = generics.get_object_or_404(Album, id=album_id)
+        self.check_object_permissions(request, album)
+
+        host = request.build_absolute_uri('/')[:-1]
+        share_url = f"{host}/share/{album.share_token}/"
+
+        # Item 1: Proprietário
+        owner_name = getattr(album.owner, "full_name", None) or album.owner.email
+        access_list = [
+            {
+                "id": "owner",
+                "email": album.owner.email,
+                "name": owner_name,
+                "type": "PROPRIETARIO",
+                "type_label": "Proprietário",
+                "status": "ACTIVE",
+                "status_label": "Ativo",
+                "invited_at": album.created_at.isoformat(),
+                "can_modify": False,
+            }
+        ]
+
+        shares = album.shares.all().order_by("-invited_at")
+        for s in shares:
+            access_list.append({
+                "id": str(s.id),
+                "email": s.invited_email,
+                "name": s.invited_email,
+                "type": s.invite_type,
+                "type_label": s.get_invite_type_display(),
+                "status": s.status,
+                "status_label": s.get_status_display(),
+                "invited_at": s.invited_at.isoformat(),
+                "can_modify": True,
+            })
+
+        serialized_shares = AlbumShareSerializer(shares, many=True).data
+
+        return Response({
+            "album_id": str(album.id),
+            "folder_name": album.folder_name,
+            "share_token": album.share_token,
+            "share_url": share_url,
+            "is_share_active": album.is_share_active,
+            "owner": {
+                "id": str(album.owner.id),
+                "email": album.owner.email,
+                "name": owner_name,
+                "type": "OWNER",
+                "type_display": "Proprietário",
+            },
+            "shares": serialized_shares,
+            "total_accesses": len(access_list),
+            "access_list": access_list,
+            "whitelist": serialized_shares,
+        })
 
     def post(self, request, album_id):
         album = generics.get_object_or_404(Album, id=album_id)
         self.check_object_permissions(request, album)
 
-        is_active = request.data.get("is_share_active", True)
-        emails = request.data.get("invited_emails", [])
+        # 1. Atualiza status de ativação do link se fornecido
+        if "is_share_active" in request.data:
+            val = str(request.data["is_share_active"]).lower() in ("true", "1")
+            album.is_share_active = val
+            album.save(update_fields=["is_share_active"])
 
-        album.is_share_active = is_active
-        album.save(update_fields=["is_share_active"])
+        action = request.data.get("action")
+        email = (request.data.get("email") or "").strip().lower()
 
-        for email in emails:
-            AlbumShare.objects.get_or_create(
+        # 2. Convidar por e-mail
+        if action == "INVITE_EMAIL" and email:
+            if email == album.owner.email.lower():
+                return Response({"error": "O proprietário já possui acesso total a este álbum."}, status=status.HTTP_400_BAD_REQUEST)
+            share, _ = AlbumShare.objects.get_or_create(
                 album=album,
-                invited_email=email.strip().lower(),
-                defaults={"role": AlbumShare.Role.VIEWER},
+                invited_email=email,
+                defaults={"invite_type": AlbumShare.InviteType.EMAIL, "status": AlbumShare.Status.ACTIVE}
             )
+            share.invite_type = AlbumShare.InviteType.EMAIL
+            share.status = AlbumShare.Status.ACTIVE
+            share.save(update_fields=["invite_type", "status", "updated_at"])
 
-        shares = album.shares.all()
-        serializer = AlbumShareSerializer(shares, many=True)
-        return Response(
-            {
-                "album_id": str(album.id),
-                "share_token": album.share_token,
-                "is_share_active": album.is_share_active,
-                "whitelist": serializer.data,
-            }
-        )
+        # 3. Bloquear e-mail (adicionar na Blacklist)
+        elif action == "BLOCK_EMAIL" and email:
+            if email == album.owner.email.lower():
+                return Response({"error": "Não é possível bloquear o proprietário do álbum."}, status=status.HTTP_400_BAD_REQUEST)
+            share, _ = AlbumShare.objects.get_or_create(
+                album=album,
+                invited_email=email,
+                defaults={"invite_type": AlbumShare.InviteType.EMAIL, "status": AlbumShare.Status.BLOCKED}
+            )
+            share.status = AlbumShare.Status.BLOCKED
+            share.save(update_fields=["status", "updated_at"])
+
+        # 4. Suporte legado a invited_emails: [...]
+        legacy_emails = request.data.get("invited_emails", [])
+        if legacy_emails:
+            for em in legacy_emails:
+                clean_em = em.strip().lower()
+                if clean_em and clean_em != album.owner.email.lower():
+                    AlbumShare.objects.get_or_create(
+                        album=album,
+                        invited_email=clean_em,
+                        defaults={"role": AlbumShare.Role.VIEWER, "invite_type": AlbumShare.InviteType.EMAIL, "status": AlbumShare.Status.ACTIVE},
+                    )
+
+        return self.get(request, album_id)
+
+
+class AlbumShareItemView(APIView):
+    """
+    PATCH /api/v1/albums/<album_id>/shares/<share_id>/ -> Alternar status (ACTIVE / BLOCKED)
+    DELETE /api/v1/albums/<album_id>/shares/<share_id>/ -> Remover da lista
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAlbumOwner]
+
+    def patch(self, request, album_id, share_id):
+        album = generics.get_object_or_404(Album, id=album_id)
+        self.check_object_permissions(request, album)
+        share = generics.get_object_or_404(AlbumShare, id=share_id, album=album)
+
+        new_status = request.data.get("status")
+        if new_status in (AlbumShare.Status.ACTIVE, AlbumShare.Status.BLOCKED):
+            share.status = new_status
+            share.save(update_fields=["status", "updated_at"])
+            return Response({
+                "id": str(share.id),
+                "email": share.invited_email,
+                "status": share.status,
+                "status_display": share.get_status_display(),
+                "message": f"Status de '{share.invited_email}' alterado para {share.get_status_display()}.",
+            })
+        return Response({"error": "Status inválido"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, album_id, share_id):
+        album = generics.get_object_or_404(Album, id=album_id)
+        self.check_object_permissions(request, album)
+        share = generics.get_object_or_404(AlbumShare, id=share_id, album=album)
+        share.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SharedWithMeAlbumsListView(APIView):
+    """
+    GET /api/v1/albums/shared-with-me/
+    Retorna a lista de álbuns onde o usuário autenticado foi convidado (status=ACTIVE e is_share_active=True).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user_email = (request.user.email or "").strip().lower()
+        shares = AlbumShare.objects.filter(
+            invited_email__iexact=user_email,
+            status=AlbumShare.Status.ACTIVE,
+            album__is_share_active=True,
+        ).select_related("album", "album__owner").order_by("-invited_at")
+
+        data = []
+        for s in shares:
+            alb = s.album
+            cover_url = ""
+            first_cluster = alb.clusters.exclude(label__in=["Outras", "Não Identificado", "nao identificado"]).order_by("-face_count").first()
+            if not first_cluster:
+                first_cluster = alb.clusters.first()
+            if first_cluster:
+                if first_cluster.avatar_crop_webp and first_cluster.avatar_crop_webp.startswith("data:image"):
+                    cover_url = first_cluster.avatar_crop_webp
+                else:
+                    cover_url = f"/api/v1/faces/clusters/{first_cluster.id}/avatar/"
+            else:
+                first_photo = alb.photos.first()
+                if first_photo:
+                    cover_url = f"/api/v1/photos/{first_photo.id}/stream/"
+
+            owner_name = getattr(alb.owner, "full_name", None) or alb.owner.email
+
+            data.append({
+                "id": str(alb.id),
+                "folder_name": alb.folder_name,
+                "owner_email": alb.owner.email,
+                "owner_name": owner_name,
+                "cover_url": cover_url,
+                "total_photos": alb.photos.count(),
+                "total_clusters": alb.clusters.count(),
+                "invite_type": s.invite_type,
+                "invite_type_display": s.get_invite_type_display(),
+                "user_invite_type": s.invite_type,
+                "user_invite_type_display": s.get_invite_type_display(),
+                "shared_at": s.invited_at.isoformat(),
+            })
+
+        return Response(data)
 
 
 class SharedAlbumDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAlbumViewerOrOwner]
+    """
+    GET /api/v1/albums/shared/<share_token>/
+    Acessa o álbum compartilhado via link único.
+    Adiciona o usuário autenticado automaticamente à whitelist (invite_type=LINK) se não estiver bloqueado.
+    """
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, share_token):
         album = generics.get_object_or_404(Album, share_token=share_token)
-        self.check_object_permissions(request, album)
+
+        if not album.is_share_active and request.user != album.owner:
+            return Response(
+                {"error_code": "SHARE_INACTIVE", "detail": "O compartilhamento deste álbum está temporariamente desativado pelo proprietário."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        user_email = (request.user.email or "").strip().lower()
+
+        # Verifica bloqueio prévio (Blacklist)
+        existing_share = album.shares.filter(invited_email__iexact=user_email).first()
+        if existing_share and existing_share.status == AlbumShare.Status.BLOCKED:
+            return Response(
+                {"error_code": "ACL_BLOCKED", "detail": "Seu acesso a este álbum foi bloqueado pelo proprietário."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Se não for o proprietário e ainda não estiver na lista de compartilhamento:
+        # Adiciona automaticamente à whitelist como "Convidado por link"
+        if request.user != album.owner and not existing_share:
+            existing_share = AlbumShare.objects.create(
+                album=album,
+                invited_email=user_email,
+                invite_type=AlbumShare.InviteType.LINK,
+                status=AlbumShare.Status.ACTIVE,
+            )
 
         clusters_data = [
             {
                 "cluster_id": str(cluster.id),
                 "label": cluster.label,
-                "avatar_url": f"/api/v1/clusters/{cluster.id}/avatar/",
+                "avatar_url": cluster.avatar_crop_webp if (cluster.avatar_crop_webp and cluster.avatar_crop_webp.startswith("data:")) else f"/api/v1/faces/clusters/{cluster.id}/avatar/",
                 "photo_count": cluster.face_count,
             }
-            for cluster in album.clusters.all()
+            for cluster in album.clusters.exclude(label__in=["Outras", "Não Identificado"]).order_by("-face_count")
         ]
 
         role = "OWNER" if request.user == album.owner else "VIEWER"
@@ -400,8 +628,10 @@ class SharedAlbumDetailView(APIView):
                 "folder_name": album.folder_name,
                 "user_role": role,
                 "total_photos": album.photos.count(),
-                "total_people": album.clusters.count(),
+                "total_people": len(clusters_data),
                 "clusters": clusters_data,
+                "invite_type": existing_share.invite_type if existing_share else "OWNER",
+                "invite_type_display": existing_share.get_invite_type_display() if existing_share else "Proprietário",
             }
         )
 

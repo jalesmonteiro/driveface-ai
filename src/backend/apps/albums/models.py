@@ -47,6 +47,14 @@ class AlbumShare(models.Model):
     class Role(models.TextChoices):
         VIEWER = "VIEWER", "Viewer"
 
+    class InviteType(models.TextChoices):
+        EMAIL = "EMAIL", "Convidado por e-mail"
+        LINK = "LINK", "Convidado por link"
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Ativo"
+        BLOCKED = "BLOCKED", "Bloqueado"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     album = models.ForeignKey(
         Album,
@@ -59,15 +67,29 @@ class AlbumShare(models.Model):
         choices=Role.choices,
         default=Role.VIEWER,
     )
+    invite_type = models.CharField(
+        max_length=20,
+        choices=InviteType.choices,
+        default=InviteType.EMAIL,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+        db_index=True,
+    )
     invited_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Compartilhamento de Álbum"
         verbose_name_plural = "Compartilhamentos de Álbuns"
         unique_together = ("album", "invited_email")
+        ordering = ["-invited_at"]
 
     def __str__(self):
-        return f"{self.invited_email} -> {self.album.folder_name}"
+        return f"{self.invited_email} ({self.get_invite_type_display()}) [{self.get_status_display()}] -> {self.album.folder_name}"
 
 
 class Job(models.Model):
