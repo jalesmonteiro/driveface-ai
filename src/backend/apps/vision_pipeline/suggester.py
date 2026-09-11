@@ -28,8 +28,8 @@ class IdentitySuggester:
         Consulta centróides com isolamento estrito WHERE user_id = owner_id.
         Retorna (Identity, distance) se menor distância <= threshold, senão None.
         """
-        # Consulta isolada por tenant (Regra R_1)
-        identities = Identity.objects.filter(user_id=user_id)
+        # Consulta isolada por tenant com prefetch dos templates biométricos (Regra R_1)
+        identities = Identity.objects.filter(user_id=user_id).prefetch_related("templates")
         if not identities.exists():
             return None
 
@@ -37,12 +37,21 @@ class IdentitySuggester:
         min_distance = float("inf")
 
         for identity in identities:
-            id_vec = np.array(identity.centroid_embedding, dtype=np.float32)
-            # cosine distance = 1 - (u . v) para vetores normalizados L2
-            dist = 1.0 - float(np.dot(centroid, id_vec))
-            if dist < min_distance:
-                min_distance = dist
-                best_identity = identity
+            # Avalia todos os templates biométricos associados à pessoa (Multi-Template FaceID)
+            candidate_vectors = []
+            if identity.centroid_embedding:
+                candidate_vectors.append(identity.centroid_embedding)
+            for tmpl in identity.templates.all():
+                if tmpl.centroid_embedding:
+                    candidate_vectors.append(tmpl.centroid_embedding)
+
+            for cand in candidate_vectors:
+                id_vec = np.array(cand, dtype=np.float32)
+                # cosine distance = 1 - (u . v) para vetores normalizados L2
+                dist = 1.0 - float(np.dot(centroid, id_vec))
+                if dist < min_distance:
+                    min_distance = dist
+                    best_identity = identity
 
         if best_identity is not None and min_distance <= self.threshold:
             return best_identity, min_distance

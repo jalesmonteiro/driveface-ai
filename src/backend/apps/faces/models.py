@@ -32,6 +32,31 @@ class Identity(models.Model):
         return f"{self.person_name} (User: {self.user.email})"
 
 
+class FaceTemplate(models.Model):
+    """
+    Template biométrico facial (centróide 512-D L2) associado a uma identidade.
+    Permite multi-template por pessoa (diferentes poses, iluminação, acessórios, ângulos).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity = models.ForeignKey(
+        Identity,
+        on_delete=models.CASCADE,
+        related_name="templates",
+    )
+    centroid_embedding = VectorField(dimensions=512)
+    total_samples = models.PositiveIntegerField(default=1)
+    notes = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Template Facial"
+        verbose_name_plural = "Templates Faciais"
+        ordering = ["-total_samples", "-created_at"]
+
+    def __str__(self):
+        return f"Template {self.id} ({self.total_samples} faces) - {self.identity.person_name}"
+
+
 class Photo(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     album = models.ForeignKey(

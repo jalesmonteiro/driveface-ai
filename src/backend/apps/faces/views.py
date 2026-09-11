@@ -64,6 +64,10 @@ class ClusterNameView(APIView):
                 total_samples=len(faces) or 1,
             )
 
+        from .services import register_face_template
+        if centroid is not None:
+            register_face_template(identity, centroid, len(faces))
+
         # 3. Verifica se já existe outro cluster no mesmo álbum com o mesmo nome (Merge Automático)
         existing_cluster = (
             Cluster.objects.filter(album=cluster.album, label__iexact=clean_name)
@@ -93,6 +97,7 @@ class ClusterNameView(APIView):
                 identity.centroid_embedding = unified_c.tolist()
                 identity.total_samples = max(identity.total_samples, len(all_faces))
                 identity.save(update_fields=["centroid_embedding", "total_samples", "updated_at"])
+                register_face_template(identity, unified_c, len(all_faces))
 
             existing_cluster.identity = identity
             existing_cluster.label = clean_name

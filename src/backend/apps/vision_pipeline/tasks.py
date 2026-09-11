@@ -265,8 +265,11 @@ def process_album_task(self, job_id: str = None):
                     cluster_name = suggested_identity.person_name
                     logger.info(f"[Job {job_id}] Identidade reconhecida pelo centróide: '{cluster_name}' (dist: {dist:.3f})")
 
-                    # Atualiza centróide da identidade com as novas amostras
+                    # Registra/atualiza template biométrico preservando variações de ângulo/pose (Multi-Template)
                     try:
+                        from faces.services import register_face_template
+                        register_face_template(suggested_identity, centroid, len(indices))
+
                         old_c = np.array(suggested_identity.centroid_embedding, dtype=np.float32)
                         comb = (old_c * suggested_identity.total_samples + centroid * len(indices)) / (suggested_identity.total_samples + len(indices))
                         norm_c = np.linalg.norm(comb)
@@ -282,14 +285,28 @@ def process_album_task(self, job_id: str = None):
 
             first_crop_b64 = all_detections[indices[0]][3]
 
-            cluster = Cluster.objects.create(
-                album=album,
-                label=cluster_name,
-                face_count=len(indices),
-                identity=suggested_identity,
-                is_suggested=(suggested_identity is not None),
-                avatar_crop_webp=first_crop_b64 or "",
-            )
+            # 8.1. Unificação Automática no Pipeline (Merge se já existe cluster para esta pessoa no álbum)
+            target_cluster = None
+            if suggested_identity:
+                target_cluster = album.clusters.filter(identity=suggested_identity).first()
+            elif cluster_name:
+                target_cluster = album.clusters.filter(label__iexact=cluster_name).first()
+
+            if target_cluster:
+                logger.info(f"[Job {job_id}] Unificando automaticamente {len(indices)} fotos no cluster existente '{target_cluster.label}'")
+                target_cluster.face_count += len(indices)
+                if not target_cluster.avatar_crop_webp and first_crop_b64:
+                    target_cluster.avatar_crop_webp = first_crop_b64
+                target_cluster.save(update_fields=["face_count", "avatar_crop_webp"])
+            else:
+                target_cluster = Cluster.objects.create(
+                    album=album,
+                    label=cluster_name,
+                    face_count=len(indices),
+                    identity=suggested_identity,
+                    is_suggested=(suggested_identity is not None),
+                    avatar_crop_webp=first_crop_b64 or "",
+                )
 
             # 9. Cria Face records vinculando foto, embedding e cluster
             for i in indices:
@@ -297,7 +314,7 @@ def process_album_task(self, job_id: str = None):
                 try:
                     Face.objects.create(
                         photo=photo_obj,
-                        cluster=cluster,
+                        cluster=target_cluster,
                         embedding=emb.tolist(),
                         bbox_xmin=bbox["xmin"],
                         bbox_ymin=bbox["ymin"],
@@ -324,6 +341,12 @@ def process_album_task(self, job_id: str = None):
                     pass
 
                 if matched_identity:
+                    try:
+                        from faces.services import register_face_template
+                        register_face_template(matched_identity, emb, 1)
+                    except Exception:
+                        pass
+
                     # Rosto isolado corresponde a uma identidade FaceID já cadastrada
                     existing_cluster = album.clusters.filter(identity=matched_identity).first()
                     if existing_cluster:

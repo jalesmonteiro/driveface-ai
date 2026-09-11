@@ -526,6 +526,57 @@ class TestDemoLoginAndAlbums:
         assert identity is not None
         assert identity.total_samples == 3
 
+    def test_multi_template_matching_for_same_identity(self):
+        """Valida que o IdentitySuggester reconhece a pessoa através de múltiplos templates faciais (Multi-Template FaceID)."""
+        user = User.objects.create_user(
+            email="multitemplate@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Multi Template User",
+        )
+        from faces.models import Identity, FaceTemplate
+        from vision_pipeline.suggester import IdentitySuggester
+        import numpy as np
+
+        # Template 1: Face frontal (vetor apontando para dimensão 0)
+        t1_vec = [0.0] * 512
+        t1_vec[0] = 1.0
+
+        identity = Identity.objects.create(
+            user=user,
+            person_name="Mariana Souza",
+            centroid_embedding=t1_vec,
+            total_samples=5,
+        )
+
+        # Template 2: Face de perfil (vetor apontando para dimensão 1)
+        t2_vec = [0.0] * 512
+        t2_vec[1] = 1.0
+        FaceTemplate.objects.create(
+            identity=identity,
+            centroid_embedding=t2_vec,
+            total_samples=3,
+            notes="Perfil lateral",
+        )
+
+        suggester = IdentitySuggester(threshold=0.40)
+
+        # Foto A: Nova foto frontal (próxima a t1, distante de t2)
+        test_frontal = np.array(t1_vec, dtype=np.float32)
+        match_a = suggester.suggest_identity(test_frontal, user.id)
+        assert match_a is not None
+        assert match_a[0].id == identity.id
+        assert match_a[0].person_name == "Mariana Souza"
+
+        # Foto B: Nova foto de perfil (próxima a t2, ortogonal a t1)
+        # Se fosse média única entre t1 e t2, foto B poderia não atingir o threshold. Com multi-template, o match é exato!
+        test_perfil = np.array(t2_vec, dtype=np.float32)
+        match_b = suggester.suggest_identity(test_perfil, user.id)
+        assert match_b is not None
+        assert match_b[0].id == identity.id
+        assert match_b[0].person_name == "Mariana Souza"
+        assert match_b[1] < 0.05  # distância quase nula ao template 2
+
+
 
 
 
