@@ -607,7 +607,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        showToast(`Pessoa identificada como "${cleanName}"! FaceID biométrico salvo.`, "success");
+        if (data.merged) {
+          showToast(data.message || `Grupos de "${cleanName}" mesclados com sucesso!`, "success");
+        } else {
+          showToast(`Pessoa identificada como "${cleanName}"! FaceID biométrico salvo.`, "success");
+        }
         if (typeof currentEditingOnSaved === "function") {
           currentEditingOnSaved(cleanName, data);
         }
@@ -1157,10 +1161,16 @@ document.addEventListener("DOMContentLoaded", () => {
           clusterId: id,
           currentName: cluster.label,
           avatarUrl: cluster.avatar_webp,
-          onSaved: (newName) => {
-            cluster.label = newName;
-            const nameEl = document.getElementById(`name-${id}`);
-            if (nameEl) nameEl.innerText = newName;
+          onSaved: (newName, data) => {
+            if (data && data.merged) {
+              if (state.currentAlbumId) {
+                loadAlbumClusters(state.currentAlbumId, true);
+              }
+            } else {
+              cluster.label = newName;
+              const nameEl = document.getElementById(`name-${id}`);
+              if (nameEl) nameEl.innerText = newName;
+            }
           }
         });
       });

@@ -431,5 +431,101 @@ class TestDemoLoginAndAlbums:
         assert matched_id.id == identity.id
         assert matched_id.person_name == "Pessoa Cadastrada"
 
+    def test_cluster_rename_merges_duplicate_clusters_in_same_album(self, api_client):
+        """Valida que ao renomear um cluster para o mesmo nome de outro existente no álbum, ocorre o merge automático."""
+        user = User.objects.create_user(
+            email="merge_tester@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Merge Tester",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_merge_1",
+            folder_name="Álbum Merge",
+        )
+        photo1 = Photo.objects.create(
+            album=album,
+            google_file_id="photo_m1",
+            filename="foto_m1.jpg",
+        )
+        photo2 = Photo.objects.create(
+            album=album,
+            google_file_id="photo_m2",
+            filename="foto_m2.jpg",
+        )
+
+        # Cluster A já identificado como "Carlos Silva" com 2 fotos
+        cluster_a = Cluster.objects.create(
+            album=album,
+            label="Carlos Silva",
+            face_count=2,
+            avatar_crop_webp="data:image/webp;base64,existing_avatar",
+        )
+        Face.objects.create(
+            photo=photo1,
+            cluster=cluster_a,
+            embedding=[0.1] * 512,
+            bbox_xmin=0.1,
+            bbox_ymin=0.1,
+            bbox_xmax=0.3,
+            bbox_ymax=0.3,
+            detection_confidence=0.95,
+        )
+        Face.objects.create(
+            photo=photo1,
+            cluster=cluster_a,
+            embedding=[0.1] * 512,
+            bbox_xmin=0.4,
+            bbox_ymin=0.4,
+            bbox_xmax=0.6,
+            bbox_ymax=0.6,
+            detection_confidence=0.96,
+        )
+
+        # Cluster B ("Pessoa #2") com 1 foto que é a mesma pessoa
+        cluster_b = Cluster.objects.create(
+            album=album,
+            label="Pessoa #2",
+            face_count=1,
+        )
+        Face.objects.create(
+            photo=photo2,
+            cluster=cluster_b,
+            embedding=[0.1] * 512,
+            bbox_xmin=0.2,
+            bbox_ymin=0.2,
+            bbox_xmax=0.4,
+            bbox_ymax=0.4,
+            detection_confidence=0.97,
+        )
+
+        api_client.force_authenticate(user=user)
+        # Renomeia o Cluster B para "Carlos Silva"
+        res = api_client.post(f"/api/v1/faces/clusters/{cluster_b.id}/name/", {"person_name": "Carlos Silva"})
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()
+
+        # Valida flag de mesclagem no retorno
+        assert data["merged"] is True
+        assert data["target_cluster_id"] == str(cluster_a.id)
+        assert data["source_cluster_id"] == str(cluster_b.id)
+        assert data["face_count"] == 3
+
+        # O Cluster B foi removido do banco
+        assert not Cluster.objects.filter(id=cluster_b.id).exists()
+
+        # O Cluster A agora possui as 3 faces unificadas
+        cluster_a.refresh_from_db()
+        assert cluster_a.face_count == 3
+        assert cluster_a.faces.count() == 3
+        assert cluster_a.label == "Carlos Silva"
+
+        # A identidade FaceID foi criada/atualizada com as 3 amostras acumuladas
+        from faces.models import Identity
+        identity = Identity.objects.filter(user=user, person_name="Carlos Silva").first()
+        assert identity is not None
+        assert identity.total_samples == 3
+
+
 
 

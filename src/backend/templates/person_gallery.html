@@ -190,10 +190,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         clusterId: clusterId,
         currentName: currentClusterLabel,
         avatarUrl: avatarSrc,
-        onSaved: (newName) => {
-          currentClusterLabel = newName;
-          if (personNameDisplay) personNameDisplay.innerText = newName;
-          if (galleryPersonBreadcrumb) galleryPersonBreadcrumb.innerText = newName;
+        onSaved: (newName, data) => {
+          if (data && data.merged && data.target_cluster_id && data.target_cluster_id !== clusterId) {
+            window.location.href = `/albums/${albumId}/person/${data.target_cluster_id}/`;
+          } else {
+            currentClusterLabel = newName;
+            if (personNameDisplay) personNameDisplay.innerText = newName;
+            if (galleryPersonBreadcrumb) galleryPersonBreadcrumb.innerText = newName;
+          }
         }
       });
     }

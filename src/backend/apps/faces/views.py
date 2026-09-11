@@ -26,7 +26,6 @@ class ClusterNameView(APIView):
             )
 
         clean_name = str(person_name).strip()
-        cluster.label = clean_name
 
         # 1. Calcula o centróide biométrico 512-D a partir das faces detectadas neste cluster
         import numpy as np
@@ -65,7 +64,61 @@ class ClusterNameView(APIView):
                 total_samples=len(faces) or 1,
             )
 
-        # 3. Vincula o cluster à identidade biométrica persistente
+        # 3. Verifica se já existe outro cluster no mesmo álbum com o mesmo nome (Merge Automático)
+        existing_cluster = (
+            Cluster.objects.filter(album=cluster.album, label__iexact=clean_name)
+            .exclude(id=cluster.id)
+            .first()
+        )
+
+        if existing_cluster:
+            # Transfere todas as faces do cluster atual para o cluster existente
+            source_cluster_id = str(cluster.id)
+            cluster.faces.all().update(cluster=existing_cluster)
+
+            # Atualiza o avatar caso o existente esteja vazio
+            if not existing_cluster.avatar_crop_webp and cluster.avatar_crop_webp:
+                existing_cluster.avatar_crop_webp = cluster.avatar_crop_webp
+
+            existing_cluster.face_count = existing_cluster.faces.count()
+
+            # Recalcula o centróide biométrico L2 unificado com todas as faces combinadas
+            all_faces = [f for f in existing_cluster.faces.exclude(embedding__isnull=True) if f.embedding is not None and len(f.embedding) == 512]
+            if all_faces:
+                embs = np.array([f.embedding for f in all_faces], dtype=np.float32)
+                unified_c = np.mean(embs, axis=0)
+                norm_u = np.linalg.norm(unified_c)
+                if norm_u > 0:
+                    unified_c = unified_c / norm_u
+                identity.centroid_embedding = unified_c.tolist()
+                identity.total_samples = max(identity.total_samples, len(all_faces))
+                identity.save(update_fields=["centroid_embedding", "total_samples", "updated_at"])
+
+            existing_cluster.identity = identity
+            existing_cluster.label = clean_name
+            existing_cluster.is_suggested = False
+            existing_cluster.save(update_fields=["label", "identity", "face_count", "avatar_crop_webp", "is_suggested"])
+
+            # Exclui o cluster de origem que agora está vazio
+            cluster.delete()
+
+            return Response(
+                {
+                    "cluster_id": str(existing_cluster.id),
+                    "person_name": existing_cluster.label,
+                    "identity_id": str(identity.id),
+                    "merged": True,
+                    "source_cluster_id": source_cluster_id,
+                    "target_cluster_id": str(existing_cluster.id),
+                    "face_count": existing_cluster.face_count,
+                    "total_samples": identity.total_samples,
+                    "message": f"Grupos mesclados com sucesso! Todas as fotos foram unificadas em '{clean_name}'.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # 4. Caso contrário, atualiza normalmente este cluster
+        cluster.label = clean_name
         cluster.identity = identity
         cluster.is_suggested = False
         cluster.save(update_fields=["label", "identity", "is_suggested"])
@@ -75,7 +128,9 @@ class ClusterNameView(APIView):
                 "cluster_id": str(cluster.id),
                 "person_name": cluster.label,
                 "identity_id": str(identity.id),
+                "merged": False,
                 "centroid_updated": True,
+                "face_count": cluster.face_count,
                 "total_samples": identity.total_samples,
             },
             status=status.HTTP_200_OK,
