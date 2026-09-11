@@ -22,7 +22,9 @@ class AlbumListView(generics.ListAPIView):
         data = []
         for alb in albums:
             cover_url = ""
-            first_cluster = alb.clusters.first()
+            first_cluster = alb.clusters.exclude(label__in=["Outras", "Não Identificado", "nao identificado"]).order_by("-face_count").first()
+            if not first_cluster:
+                first_cluster = alb.clusters.first()
             if first_cluster:
                 if first_cluster.avatar_crop_webp and first_cluster.avatar_crop_webp.startswith("data:image"):
                     cover_url = first_cluster.avatar_crop_webp
@@ -125,7 +127,22 @@ class AlbumClustersListView(APIView):
         from faces.models import Cluster
 
         photos = album.photos.all()
-        clusters = list(album.clusters.all().order_by("-face_count"))
+        raw_clusters = list(album.clusters.all().order_by("-face_count"))
+
+        # Pessoas e clusters ordenados por -face_count, e "Outras" / "Não Identificado" SEMPRE por último
+        normal_clusters = []
+        other_clusters = []
+        for c in raw_clusters:
+            clean_lbl = c.label.strip().lower()
+            if clean_lbl in ("outras", "outros", "não identificado", "nao identificado"):
+                if c.label != "Outras":
+                    c.label = "Outras"
+                    c.save(update_fields=["label"])
+                other_clusters.append(c)
+            else:
+                normal_clusters.append(c)
+
+        clusters = normal_clusters + other_clusters
 
         # Verifica o estado do último job para informar ao frontend
         last_job = album.jobs.order_by("-created_at").first()

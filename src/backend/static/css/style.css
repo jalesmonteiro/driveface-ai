@@ -1998,6 +1998,8 @@ body {
 
 .danger-modal {
   max-width: 480px;
+  height: auto;
+  max-height: 90vh;
   border: 1px solid rgba(239, 68, 68, 0.35);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(239, 68, 68, 0.15);
   animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2103,6 +2105,204 @@ body {
 }
 
 .danger-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* ====================================================================
+   MODAL CUSTOMIZADA: IDENTIFICAR / RENOMEAR PESSOA (FACEID)
+   ==================================================================== */
+.edit-person-modal {
+  max-width: 500px;
+  height: auto;
+  max-height: 90vh;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(99, 102, 241, 0.2);
+  animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  background: #101524;
+}
+
+.edit-person-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.edit-person-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.edit-person-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+  flex-shrink: 0;
+}
+
+.modal-title-text {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  display: block;
+  line-height: 1.25;
+}
+
+.modal-subtitle-text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  display: block;
+}
+
+.edit-person-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.edit-person-avatar-wrap {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #6366f1;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.edit-person-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.edit-person-avatar-emoji {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.edit-person-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  overflow: hidden;
+}
+
+.edit-person-preview-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.edit-person-current-name {
+  font-size: 1.05rem;
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edit-person-preview-sub {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-icon .input-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: var(--transition-smooth);
+}
+
+.input-with-icon input:focus ~ .input-icon,
+.input-with-icon:focus-within .input-icon {
+  color: #818cf8;
+}
+
+.edit-person-input {
+  width: 100%;
+  padding: 0.8rem 1rem 0.8rem 2.85rem !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: var(--radius-md) !important;
+  color: #fff !important;
+  font-size: 0.98rem !important;
+  font-weight: 500;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.edit-person-input:focus {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3) !important;
+}
+
+.biometric-info-box {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-top: 1.25rem;
+}
+
+.biometric-info-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.biometric-info-text strong {
+  color: #c7d2fe;
+  font-size: 0.86rem;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.biometric-info-text p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.edit-person-footer {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;

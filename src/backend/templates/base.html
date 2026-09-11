@@ -227,6 +227,82 @@
     </div>
   </div>
 
+  <!-- Modal Customizada: Identificar / Renomear Pessoa (FaceID) -->
+  <div class="drive-modal-backdrop" id="editPersonModal" style="display: none;">
+    <div class="drive-modal-dialog glass edit-person-modal">
+      <div class="drive-modal-header edit-person-header">
+        <div class="edit-person-header-title">
+          <div class="edit-person-icon-badge">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div>
+            <span class="modal-title-text">Identificar Pessoa</span>
+            <span class="modal-subtitle-text">Cadastro de FaceID biométrico 512-D</span>
+          </div>
+        </div>
+        <button type="button" class="btn-icon" id="btnCloseEditPersonModal" title="Fechar">&times;</button>
+      </div>
+
+      <div class="drive-modal-body modal-body-padded">
+        <!-- Avatar Preview e Detalhes -->
+        <div class="edit-person-preview-box">
+          <div class="edit-person-avatar-wrap" id="editPersonAvatarWrap">
+            <img id="editPersonAvatarImg" src="" alt="Avatar" class="edit-person-avatar" style="display: none;">
+            <div id="editPersonAvatarEmoji" class="edit-person-avatar-emoji">👤</div>
+          </div>
+          <div class="edit-person-preview-meta">
+            <span class="edit-person-preview-label">Identificação Atual</span>
+            <strong id="editPersonCurrentName" class="edit-person-current-name">Pessoa</strong>
+            <span class="edit-person-preview-sub">O nome atribuído será sincronizado automaticamente com novos álbuns processados.</span>
+          </div>
+        </div>
+
+        <!-- Input do Nome -->
+        <div class="form-group" style="margin-top: 1.25rem;">
+          <label for="inputEditPersonName" style="display: block; font-size: 0.88rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.5rem;">
+            Nome da Pessoa <span style="color: #ef4444;">*</span>
+          </label>
+          <div class="input-with-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="input-icon">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input 
+              type="text" 
+              id="inputEditPersonName" 
+              class="form-control edit-person-input" 
+              placeholder="Ex: Carlos Silva, Vovó Ana, Papai..." 
+              autocomplete="off"
+              maxlength="100"
+            >
+          </div>
+        </div>
+
+        <!-- Caixa Informativa de Biometria -->
+        <div class="biometric-info-box">
+          <div class="biometric-info-icon">🧬</div>
+          <div class="biometric-info-text">
+            <strong>Centróide Biométrico Persistente:</strong>
+            <p>O DriveFace AI extrai as características faciais desta pessoa em um vetor matemático L2 de 512 dimensões. Ao reprocessar pastas ou adicionar novas fotos, o sistema reconhecerá essa pessoa automaticamente.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="drive-modal-footer edit-person-footer">
+        <button type="button" class="btn btn-secondary" id="btnCancelEditPersonModal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmEditPersonModal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span id="btnSavePersonNameText">Salvar Identificação</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 

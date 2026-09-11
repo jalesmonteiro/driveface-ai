@@ -243,7 +243,7 @@ def process_album_task(self, job_id: str = None):
         # 8. Remove clusters antigos do álbum e cria novos
         album.clusters.all().delete()
 
-        suggester = IdentitySuggester(threshold=0.35)
+        suggester = IdentitySuggester(threshold=0.40)
 
         for label_id in sorted(unique_labels):
             indices = [i for i, lbl in enumerate(cluster_labels) if lbl == label_id]
@@ -263,8 +263,22 @@ def process_album_task(self, job_id: str = None):
                 if result:
                     suggested_identity, dist = result
                     cluster_name = suggested_identity.person_name
-            except Exception:
-                pass
+                    logger.info(f"[Job {job_id}] Identidade reconhecida pelo centróide: '{cluster_name}' (dist: {dist:.3f})")
+
+                    # Atualiza centróide da identidade com as novas amostras
+                    try:
+                        old_c = np.array(suggested_identity.centroid_embedding, dtype=np.float32)
+                        comb = (old_c * suggested_identity.total_samples + centroid * len(indices)) / (suggested_identity.total_samples + len(indices))
+                        norm_c = np.linalg.norm(comb)
+                        if norm_c > 0:
+                            comb = comb / norm_c
+                        suggested_identity.centroid_embedding = comb.tolist()
+                        suggested_identity.total_samples += len(indices)
+                        suggested_identity.save(update_fields=["centroid_embedding", "total_samples", "updated_at"])
+                    except Exception as e_up:
+                        logger.warning(f"Falha ao atualizar centróide da identidade: {e_up}")
+            except Exception as exc:
+                logger.warning(f"Erro ao consultar suggester: {exc}")
 
             first_crop_b64 = all_detections[indices[0]][3]
 
@@ -294,17 +308,60 @@ def process_album_task(self, job_id: str = None):
                 except Exception as exc:
                     logger.error(f"Erro ao salvar Face record: {exc}")
 
-        # Faces de ruído (cluster -1) sem agrupamento
+        # Faces de ruído (cluster -1) sem agrupamento prévio no DBSCAN
         noise_indices = [i for i, lbl in enumerate(cluster_labels) if lbl == -1]
+        unmatched_noise_indices = []
+
         if noise_indices:
-            noise_crop_b64 = all_detections[noise_indices[0]][3]
+            for idx in noise_indices:
+                photo_obj, emb, bbox, crop_b64 = all_detections[idx]
+                matched_identity = None
+                try:
+                    result = suggester.suggest_identity(emb, owner.id)
+                    if result:
+                        matched_identity, dist = result
+                except Exception:
+                    pass
+
+                if matched_identity:
+                    # Rosto isolado corresponde a uma identidade FaceID já cadastrada
+                    existing_cluster = album.clusters.filter(identity=matched_identity).first()
+                    if existing_cluster:
+                        existing_cluster.face_count += 1
+                        existing_cluster.save(update_fields=["face_count"])
+                        target_cluster = existing_cluster
+                    else:
+                        target_cluster = Cluster.objects.create(
+                            album=album,
+                            label=matched_identity.person_name,
+                            face_count=1,
+                            identity=matched_identity,
+                            is_suggested=True,
+                            avatar_crop_webp=crop_b64 or "",
+                        )
+                    Face.objects.create(
+                        photo=photo_obj,
+                        cluster=target_cluster,
+                        embedding=emb.tolist(),
+                        bbox_xmin=bbox["xmin"],
+                        bbox_ymin=bbox["ymin"],
+                        bbox_xmax=bbox["xmax"],
+                        bbox_ymax=bbox["ymax"],
+                        detection_confidence=bbox["conf"],
+                    )
+                else:
+                    unmatched_noise_indices.append(idx)
+
+        # Rostos de ruído não identificados são agrupados no cluster "Outras"
+        if unmatched_noise_indices:
+            noise_crop_b64 = all_detections[unmatched_noise_indices[0]][3]
             noise_cluster = Cluster.objects.create(
                 album=album,
-                label="Não Identificado",
-                face_count=len(noise_indices),
+                label="Outras",
+                face_count=len(unmatched_noise_indices),
                 avatar_crop_webp=noise_crop_b64 or "",
             )
-            for i in noise_indices:
+            for i in unmatched_noise_indices:
                 photo_obj, emb, bbox, _ = all_detections[i]
                 try:
                     Face.objects.create(

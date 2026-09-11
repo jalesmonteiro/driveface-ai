@@ -518,6 +518,138 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // ==========================================================================
+  // MODAL CUSTOMIZADA: IDENTIFICAR / RENOMEAR PESSOA (FACEID)
+  // ==========================================================================
+  const editPersonModal = document.getElementById("editPersonModal");
+  const editPersonCurrentName = document.getElementById("editPersonCurrentName");
+  const inputEditPersonName = document.getElementById("inputEditPersonName");
+  const editPersonAvatarImg = document.getElementById("editPersonAvatarImg");
+  const editPersonAvatarEmoji = document.getElementById("editPersonAvatarEmoji");
+  const btnCloseEditPersonModal = document.getElementById("btnCloseEditPersonModal");
+  const btnCancelEditPersonModal = document.getElementById("btnCancelEditPersonModal");
+  const btnConfirmEditPersonModal = document.getElementById("btnConfirmEditPersonModal");
+  const btnSavePersonNameText = document.getElementById("btnSavePersonNameText");
+
+  let currentEditingClusterId = null;
+  let currentEditingOnSaved = null;
+
+  function closeEditPersonModal() {
+    if (!editPersonModal) return;
+    editPersonModal.style.display = "none";
+    currentEditingClusterId = null;
+    currentEditingOnSaved = null;
+    if (btnConfirmEditPersonModal) btnConfirmEditPersonModal.disabled = false;
+    if (btnSavePersonNameText) btnSavePersonNameText.innerText = "Salvar Identificação";
+  }
+
+  function openEditPersonModal({ clusterId, currentName, avatarUrl, onSaved }) {
+    if (!editPersonModal) return;
+    currentEditingClusterId = clusterId;
+    currentEditingOnSaved = onSaved;
+
+    const cleanCurrent = (currentName || "Pessoa").trim();
+    if (editPersonCurrentName) editPersonCurrentName.innerText = cleanCurrent;
+    if (inputEditPersonName) {
+      inputEditPersonName.value = cleanCurrent;
+    }
+
+    // Configura o avatar no preview
+    if (avatarUrl && (avatarUrl.startsWith("data:image") || avatarUrl.startsWith("/api/") || avatarUrl.startsWith("http"))) {
+      if (editPersonAvatarImg) {
+        editPersonAvatarImg.src = avatarUrl;
+        editPersonAvatarImg.style.display = "block";
+      }
+      if (editPersonAvatarEmoji) editPersonAvatarEmoji.style.display = "none";
+    } else {
+      if (editPersonAvatarImg) editPersonAvatarImg.style.display = "none";
+      if (editPersonAvatarEmoji) {
+        editPersonAvatarEmoji.style.display = "block";
+        editPersonAvatarEmoji.innerText = avatarUrl || "👤";
+      }
+    }
+
+    editPersonModal.style.display = "flex";
+
+    // Foca e seleciona o input de texto
+    setTimeout(() => {
+      if (inputEditPersonName) {
+        inputEditPersonName.focus();
+        inputEditPersonName.select();
+      }
+    }, 100);
+  }
+
+  window.openEditPersonModal = openEditPersonModal;
+  window.closeEditPersonModal = closeEditPersonModal;
+
+  async function submitEditPersonModal() {
+    if (!currentEditingClusterId) return;
+    const cleanName = (inputEditPersonName?.value || "").trim();
+    if (!cleanName) {
+      showToast("Informe o nome da pessoa.", "error");
+      inputEditPersonName?.focus();
+      return;
+    }
+
+    if (btnConfirmEditPersonModal) btnConfirmEditPersonModal.disabled = true;
+    if (btnSavePersonNameText) btnSavePersonNameText.innerText = "Salvando...";
+
+    try {
+      const res = await (window.authFetch || fetch)(`/api/v1/faces/clusters/${currentEditingClusterId}/name/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${state.token}`
+        },
+        body: JSON.stringify({ person_name: cleanName })
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(`Pessoa identificada como "${cleanName}"! FaceID biométrico salvo.`, "success");
+        if (typeof currentEditingOnSaved === "function") {
+          currentEditingOnSaved(cleanName, data);
+        }
+        closeEditPersonModal();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || errData.detail || "Não foi possível salvar o nome no servidor.", "error");
+        if (btnConfirmEditPersonModal) btnConfirmEditPersonModal.disabled = false;
+        if (btnSavePersonNameText) btnSavePersonNameText.innerText = "Salvar Identificação";
+      }
+    } catch (err) {
+      console.error("Erro ao salvar FaceID:", err);
+      showToast("Erro de conexão ao salvar a identificação.", "error");
+      if (btnConfirmEditPersonModal) btnConfirmEditPersonModal.disabled = false;
+      if (btnSavePersonNameText) btnSavePersonNameText.innerText = "Salvar Identificação";
+    }
+  }
+
+  btnConfirmEditPersonModal?.addEventListener("click", submitEditPersonModal);
+  btnCloseEditPersonModal?.addEventListener("click", closeEditPersonModal);
+  btnCancelEditPersonModal?.addEventListener("click", closeEditPersonModal);
+
+  editPersonModal?.addEventListener("click", (e) => {
+    if (e.target === editPersonModal) closeEditPersonModal();
+  });
+
+  inputEditPersonName?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitEditPersonModal();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeEditPersonModal();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && editPersonModal && editPersonModal.style.display !== "none") {
+      closeEditPersonModal();
+    }
+  });
+
   // Alterna para a visão da grade de álbuns
   function showAlbumsList() {
     if (typeof albumPollingTimer !== "undefined" && albumPollingTimer) {
@@ -956,26 +1088,38 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // 4. GRADE DE PESSOAS RECONHECIDAS
-    clustersGrid.innerHTML = clusters.map((cluster, index) => {
-      const emoji = avatarEmojis[index % avatarEmojis.length];
+    // 4. GRADE DE PESSOAS RECONHECIDAS (Pessoas identificadas primeiro, "Outras" sempre por último)
+    const normalList = clusters.filter(c => !["outras", "outros", "não identificado", "nao identificado"].includes((c.label || "").trim().toLowerCase()));
+    const otherList = clusters.filter(c => ["outras", "outros", "não identificado", "nao identificado"].includes((c.label || "").trim().toLowerCase()))
+      .map(c => ({ ...c, label: "Outras" }));
+    const sortedClusters = [...normalList, ...otherList];
+
+    clustersGrid.innerHTML = sortedClusters.map((cluster, index) => {
+      const isOther = (cluster.label || "").trim().toLowerCase() === "outras";
+      const emoji = isOther ? "👥" : avatarEmojis[index % avatarEmojis.length];
       const isRealImg = cluster.avatar_webp && (cluster.avatar_webp.startsWith("/api/") || cluster.avatar_webp.startsWith("data:") || cluster.avatar_webp.startsWith("http"));
       const avatarHtml = isRealImg
         ? `<img src="${cluster.avatar_webp}" class="cluster-avatar" style="object-fit: cover;" alt="${cluster.label}" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'cluster-avatar\\'>${emoji}</div>';">`
         : `<div class="cluster-avatar">${emoji}</div>`;
 
+      const renameBtn = isOther ? "" : `
+        <button class="btn-icon btn-rename" data-id="${cluster.id}" title="Nomear Pessoa">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        </button>
+      `;
+
+      const photosDesc = isOther ? `${cluster.face_count} fotos com rostos diversos` : `${cluster.face_count} fotos encontradas`;
+
       return `
-        <div class="cluster-card glass" data-id="${cluster.id}" style="cursor: pointer;" title="Clique para ver todas as fotos desta pessoa">
+        <div class="cluster-card glass ${isOther ? 'cluster-other-card' : ''}" data-id="${cluster.id}" style="cursor: pointer;" title="Clique para ver todas as fotos ${isOther ? 'desta categoria' : 'desta pessoa'}">
           <div class="cluster-avatar-wrapper">
             ${avatarHtml}
           </div>
           <div class="cluster-name-box">
             <h4 class="cluster-name" id="name-${cluster.id}">${cluster.label}</h4>
-            <button class="btn-icon btn-rename" data-id="${cluster.id}" title="Nomear Pessoa">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-            </button>
+            ${renameBtn}
           </div>
-          <p class="cluster-photos-count">${cluster.face_count} fotos encontradas &bull; <span class="gradient-text">Ver Fotos &rarr;</span></p>
+          <p class="cluster-photos-count">${photosDesc} &bull; <span class="gradient-text">Ver Fotos &rarr;</span></p>
           <div class="cluster-actions">
             <button class="btn btn-secondary btn-sm btn-export-zip" data-id="${cluster.id}" data-label="${cluster.label}" title="Baixar fotos em arquivo ZIP">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
@@ -1001,39 +1145,24 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // Event listeners para renomear pessoa (atualiza centróide no banco)
+    // Event listeners para renomear pessoa (abre modal customizada)
     document.querySelectorAll(".btn-rename").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const id = btn.getAttribute("data-id");
         const cluster = clusters.find(c => c.id === id);
-        const newName = prompt(`Identificar pessoa no cluster (${cluster.label}):`, cluster.label);
-        if (newName && newName.trim() && newName.trim() !== cluster.label) {
-          const cleanName = newName.trim();
-          try {
-            const res = await (window.authFetch || fetch)(`/api/v1/faces/clusters/${id}/name/`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${state.token}`
-              },
-              body: JSON.stringify({ person_name: cleanName })
-            });
-            if (res.ok) {
-              cluster.label = cleanName;
-              const nameEl = document.getElementById(`name-${id}`);
-              if (nameEl) nameEl.innerText = cleanName;
-              showToast(`Pessoa identificada como "${cleanName}"! Centróide L2 salvo no PostgreSQL.`, "success");
-            } else {
-              showToast("Não foi possível salvar o nome no servidor.", "error");
-            }
-          } catch (err) {
-            cluster.label = cleanName;
+        if (!cluster) return;
+
+        openEditPersonModal({
+          clusterId: id,
+          currentName: cluster.label,
+          avatarUrl: cluster.avatar_webp,
+          onSaved: (newName) => {
+            cluster.label = newName;
             const nameEl = document.getElementById(`name-${id}`);
-            if (nameEl) nameEl.innerText = cleanName;
-            showToast(`Pessoa renomeada para "${cleanName}".`, "success");
+            if (nameEl) nameEl.innerText = newName;
           }
-        }
+        });
       });
     });
 

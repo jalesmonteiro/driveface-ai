@@ -269,4 +269,167 @@ class TestDemoLoginAndAlbums:
         assert data["status"] == "PENDING"
         assert len(mock_called) == 1
 
+    def test_cluster_name_creates_and_updates_persistent_faceid_identity(self, api_client):
+        """Valida que nomear um cluster persiste a identidade biométrica (FaceID) com centróide 512-D."""
+        user = User.objects.create_user(
+            email="faceid_tester@driveface.ai",
+            password="StrongPassword123!",
+            full_name="FaceID Tester",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_fid_1",
+            folder_name="Álbum FaceID",
+        )
+        photo = Photo.objects.create(
+            album=album,
+            google_file_id="photo_fid_1",
+            filename="foto1.jpg",
+        )
+        cluster = Cluster.objects.create(
+            album=album,
+            label="Pessoa Desconhecida",
+            face_count=2,
+        )
+
+        # Vetor 512-D com valor 1.0 na primeira dimensão (L2-normalizado)
+        emb1 = [0.0] * 512
+        emb1[0] = 1.0
+        emb2 = [0.0] * 512
+        emb2[0] = 1.0
+
+        Face.objects.create(
+            photo=photo,
+            cluster=cluster,
+            embedding=emb1,
+            bbox_xmin=0.1,
+            bbox_ymin=0.1,
+            bbox_xmax=0.3,
+            bbox_ymax=0.3,
+            detection_confidence=0.99,
+        )
+        Face.objects.create(
+            photo=photo,
+            cluster=cluster,
+            embedding=emb2,
+            bbox_xmin=0.4,
+            bbox_ymin=0.4,
+            bbox_xmax=0.6,
+            bbox_ymax=0.6,
+            detection_confidence=0.98,
+        )
+
+        api_client.force_authenticate(user=user)
+        res = api_client.post(f"/api/v1/faces/clusters/{cluster.id}/name/", {"person_name": "Maria Silva"})
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()
+        assert data["person_name"] == "Maria Silva"
+        assert data["centroid_updated"] is True
+        assert data["total_samples"] == 2
+
+        # Valida que a Identity foi persistida no PostgreSQL
+        from faces.models import Identity
+        identity = Identity.objects.filter(user=user, person_name="Maria Silva").first()
+        assert identity is not None
+        assert identity.total_samples == 2
+        assert len(identity.centroid_embedding) == 512
+        assert identity.centroid_embedding[0] == 1.0
+
+        # Cluster vinculado à Identity
+        cluster.refresh_from_db()
+        assert cluster.identity == identity
+        assert cluster.label == "Maria Silva"
+
+    def test_album_clusters_list_orders_outras_at_the_very_end(self, api_client):
+        """Valida que o cluster 'Outras' é posicionado no final da grade, mesmo com a maior contagem de faces."""
+        user = User.objects.create_user(
+            email="order_tester@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Order Tester",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_order_1",
+            folder_name="Álbum Ordem",
+        )
+        # Cluster Outras com 80 faces (maior contagem)
+        c_outras = Cluster.objects.create(
+            album=album,
+            label="Outras",
+            face_count=80,
+        )
+        # Clusters identificados com menos faces
+        c_ana = Cluster.objects.create(
+            album=album,
+            label="Ana",
+            face_count=30,
+        )
+        c_carlos = Cluster.objects.create(
+            album=album,
+            label="Carlos",
+            face_count=10,
+        )
+
+        api_client.force_authenticate(user=user)
+        res = api_client.get(f"/api/v1/albums/{album.id}/clusters/")
+        assert res.status_code == status.HTTP_200_OK
+        clusters_resp = res.json()["clusters"]
+        assert len(clusters_resp) == 3
+
+        # A ordem deve ser: Ana (30), Carlos (10), e por último Outras (80)
+        assert clusters_resp[0]["label"] == "Ana"
+        assert clusters_resp[1]["label"] == "Carlos"
+        assert clusters_resp[2]["label"] == "Outras"
+
+    def test_identity_preserved_on_album_delete_and_recognized_by_suggester(self, api_client):
+        """Valida que ao excluir um álbum sem remover FaceIDs, a identidade biométrica permanece no PostgreSQL."""
+        user = User.objects.create_user(
+            email="preserve_tester@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Preserve Tester",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_pres_1",
+            folder_name="Álbum Para Excluir",
+        )
+        from faces.models import Identity
+        emb = [0.0] * 512
+        emb[0] = 1.0
+        identity = Identity.objects.create(
+            user=user,
+            person_name="Pessoa Cadastrada",
+            centroid_embedding=emb,
+            total_samples=5,
+        )
+        Cluster.objects.create(
+            album=album,
+            label="Pessoa Cadastrada",
+            face_count=5,
+            identity=identity,
+        )
+
+        api_client.force_authenticate(user=user)
+        # Exclui o álbum SEM marcar delete_faceids
+        res = api_client.delete(f"/api/v1/albums/{album.id}/", {"delete_faceids": "false"})
+        assert res.status_code == status.HTTP_200_OK
+
+        # O álbum foi excluído do banco
+        assert not Album.objects.filter(id=album.id).exists()
+
+        # A identidade FaceID PERMANECE intocada
+        assert Identity.objects.filter(id=identity.id).exists()
+
+        # Testa o IdentitySuggester com o vetor da face para confirmar que a pessoa é reconhecida
+        from vision_pipeline.suggester import IdentitySuggester
+        import numpy as np
+        suggester = IdentitySuggester(threshold=0.40)
+        face_vector = np.array(emb, dtype=np.float32)
+        match = suggester.suggest_identity(face_vector, user.id)
+        assert match is not None
+        matched_id, dist = match
+        assert matched_id.id == identity.id
+        assert matched_id.person_name == "Pessoa Cadastrada"
+
+
 

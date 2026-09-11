@@ -180,31 +180,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Renomear pessoa
-  btnEditPersonName?.addEventListener("click", async () => {
-    const newName = prompt(`Identificar pessoa (${currentClusterLabel}):`, currentClusterLabel);
-    if (newName && newName.trim() && newName.trim() !== currentClusterLabel) {
-      const cleanName = newName.trim();
-      try {
-        const res = await (window.authFetch || fetch)(`/api/v1/faces/clusters/${clusterId}/name/`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ person_name: cleanName })
-        });
-        if (res.ok) {
-          currentClusterLabel = cleanName;
-          personNameDisplay.innerText = cleanName;
-          galleryPersonBreadcrumb.innerText = cleanName;
-          if (typeof showToast === "function") {
-            showToast(`Pessoa renomeada para "${cleanName}"! Centróide L2 atualizado.`, "success");
-          }
+  // Renomear pessoa (abre modal customizada)
+  btnEditPersonName?.addEventListener("click", () => {
+    const avatarImgEl = document.getElementById("personAvatarContainer")?.querySelector("img");
+    const avatarSrc = avatarImgEl ? avatarImgEl.src : null;
+
+    if (typeof window.openEditPersonModal === "function") {
+      window.openEditPersonModal({
+        clusterId: clusterId,
+        currentName: currentClusterLabel,
+        avatarUrl: avatarSrc,
+        onSaved: (newName) => {
+          currentClusterLabel = newName;
+          if (personNameDisplay) personNameDisplay.innerText = newName;
+          if (galleryPersonBreadcrumb) galleryPersonBreadcrumb.innerText = newName;
         }
-      } catch (e) {
-        personNameDisplay.innerText = cleanName;
-      }
+      });
     }
   });
 

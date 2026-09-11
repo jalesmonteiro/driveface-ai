@@ -8,8 +8,8 @@ from .serializers import ClusterSerializer, IdentitySerializer
 
 class ClusterNameView(APIView):
     """
-    POST /api/v1/clusters/{cluster_id}/name/
-    Atribui nome a um cluster e atualiza a identidade no banco.
+    POST /api/v1/faces/clusters/{cluster_id}/name/
+    Atribui nome a um cluster e cria/atualiza a identidade biométrica (FaceID) no banco de dados.
     Restrito ao proprietário do álbum.
     """
     permission_classes = [permissions.IsAuthenticated, IsAlbumOwner]
@@ -19,21 +19,64 @@ class ClusterNameView(APIView):
         self.check_object_permissions(request, cluster.album)
 
         person_name = request.data.get("person_name")
-        if not person_name:
+        if not person_name or not str(person_name).strip():
             return Response(
                 {"error": "person_name é obrigatório"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        cluster.label = person_name.strip()
-        cluster.save(update_fields=["label"])
+        clean_name = str(person_name).strip()
+        cluster.label = clean_name
+
+        # 1. Calcula o centróide biométrico 512-D a partir das faces detectadas neste cluster
+        import numpy as np
+        faces = [f for f in cluster.faces.exclude(embedding__isnull=True) if f.embedding is not None and len(f.embedding) == 512]
+        centroid = None
+        if faces:
+            embs = np.array([f.embedding for f in faces], dtype=np.float32)
+            centroid = np.mean(embs, axis=0)
+            norm = np.linalg.norm(centroid)
+            if norm > 0:
+                centroid = centroid / norm
+
+        # 2. Localiza ou cria a Identity (FaceID biométrica) do usuário
+        identity = Identity.objects.filter(user=request.user, person_name__iexact=clean_name).first()
+        if identity:
+            if centroid is not None:
+                old_c = np.array(identity.centroid_embedding, dtype=np.float32)
+                if identity.total_samples > 0 and np.linalg.norm(old_c) > 0:
+                    # Média ponderada entre amostras já acumuladas e as novas amostras
+                    combined = (old_c * identity.total_samples + centroid * len(faces)) / (identity.total_samples + len(faces))
+                else:
+                    combined = centroid
+                norm = np.linalg.norm(combined)
+                if norm > 0:
+                    combined = combined / norm
+                identity.centroid_embedding = combined.tolist()
+                identity.total_samples += len(faces)
+            identity.person_name = clean_name
+            identity.save(update_fields=["person_name", "centroid_embedding", "total_samples", "updated_at"])
+        else:
+            centroid_list = centroid.tolist() if centroid is not None else [0.0] * 512
+            identity = Identity.objects.create(
+                user=request.user,
+                person_name=clean_name,
+                centroid_embedding=centroid_list,
+                total_samples=len(faces) or 1,
+            )
+
+        # 3. Vincula o cluster à identidade biométrica persistente
+        cluster.identity = identity
+        cluster.is_suggested = False
+        cluster.save(update_fields=["label", "identity", "is_suggested"])
 
         return Response(
             {
                 "cluster_id": str(cluster.id),
                 "person_name": cluster.label,
-                "identity_id": str(cluster.identity_id) if cluster.identity_id else None,
+                "identity_id": str(identity.id),
                 "centroid_updated": True,
+                "total_samples": identity.total_samples,
             },
             status=status.HTTP_200_OK,
         )
