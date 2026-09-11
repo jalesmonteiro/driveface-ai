@@ -12,9 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml /app/
+COPY pyproject.toml requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir "Django>=5.0,<5.2" djangorestframework djangorestframework-simplejwt django-cors-headers django-environ argon2-cffi celery redis "psycopg[binary]" pgvector google-api-python-client google-auth-oauthlib pillow scikit-learn numpy gunicorn
+    pip install --no-cache-dir -r /app/requirements.txt gunicorn
 
 COPY . /app/
 

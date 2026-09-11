@@ -11,6 +11,19 @@ Sistema inteligente multi-usuário para agrupamento facial e indexação automá
 
 Consulte a pasta `docs/` para especificações completas (`const.md`, `spec.md`, `plan.md`, `tasks.md`).
 
+### Por que PostgreSQL 16 com pgvector (e não MySQL)?
+
+A escolha do **PostgreSQL 16 com a extensão `pgvector`** em vez de bancos relacionais tradicionais (como MySQL) é uma decisão arquitetural fundamental para sistemas modernos de Inteligência Artificial:
+
+1. **Tipo Nativo de Vetor de Alta Dimensão (`vector(512)`):**  
+   O pipeline de visão (ArcFace) extrai embeddings faciais de 512 dimensões para cada rosto detectado. O `pgvector` armazena esses vetores como um tipo primitivo no banco de dados com suporte direto no Django ORM (`pgvector.django.VectorField`). No MySQL tradicional, seria necessário converter vetores para BLOBs ou strings JSON desestruturadas.
+
+2. **Cálculo de Similaridade de Cosseno Direto no Banco:**  
+   O `pgvector` realiza operações matemáticas vetoriais (distância de cosseno `<=>`, produto interno `<#>`, distância euclidiana `<->`) diretamente na camada do banco, utilizando índices vetoriais avançados (**HNSW** e **IVFFlat**). Isso permite consultar e sugerir identidades (`Identity.objects.order_by(CosineDistance(...))`) em milissegundos mesmo com centenas de milhares de fotos, sem precisar carregar todos os vetores para a memória RAM do Python.
+
+3. **Arquitetura Unificada e ACID (Sem Complexidade de Dois Bancos):**  
+   Ao usar o PostgreSQL, evitamos a necessidade de gerenciar um banco de dados relacional (ex: MySQL) + um banco de dados vetorial dedicado separado (ex: Pinecone, Milvus ou Qdrant). Todas as relações (usuários, permissões, álbuns, fotos, clusters e centróides faciais) compartilham a mesma integridade referencial, transações ACID e rotina de backup simples.
+
 ---
 
 ## Pré-requisitos
