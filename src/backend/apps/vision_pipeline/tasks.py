@@ -30,9 +30,38 @@ def _load_image_as_np(image_bytes: bytes):
     return np.array(img)
 
 
-def _crop_face_to_webp_url(photo_id: str) -> str:
-    """Retorna URL de streaming da foto para usar como avatar."""
-    return f"/api/v1/photos/{photo_id}/stream/"
+def _crop_face_to_base64_webp(img_np, bbox_dict, w, h) -> str:
+    """Recorta o rosto específico com margem de 35% e retorna miniatura WebP 160x160 em Base64."""
+    import base64
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+    try:
+        x1 = int(bbox_dict["xmin"] * w)
+        y1 = int(bbox_dict["ymin"] * h)
+        x2 = int(bbox_dict["xmax"] * w)
+        y2 = int(bbox_dict["ymax"] * h)
+
+        bw = max(1, x2 - x1)
+        bh = max(1, y2 - y1)
+
+        pad_x = int(bw * 0.35)
+        pad_y = int(bh * 0.35)
+
+        crop_x1 = max(0, x1 - pad_x)
+        crop_y1 = max(0, y1 - pad_y)
+        crop_x2 = min(w, x2 + pad_x)
+        crop_y2 = min(h, y2 + pad_y)
+
+        img_pil = Image.fromarray(img_np)
+        face_img = img_pil.crop((crop_x1, crop_y1, crop_x2, crop_y2))
+        face_thumb = face_img.resize((160, 160), Image.Resampling.LANCZOS)
+
+        buf = io.BytesIO()
+        face_thumb.save(buf, format="WEBP", quality=85)
+        return f"data:image/webp;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+    except Exception as exc:
+        logger.warning(f"Falha ao gerar recorte de face em base64: {exc}")
+        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +203,8 @@ def process_album_task(self, job_id: str):
                         "ymax": min(1.0, float(bbox[3]) / h),
                         "conf": float(face.det_score),
                     }
-                    all_detections.append((photo, emb, bbox_dict))
+                    crop_b64 = _crop_face_to_base64_webp(img_np, bbox_dict, w, h)
+                    all_detections.append((photo, emb, bbox_dict, crop_b64))
 
             except Exception as exc:
                 logger.error(f"Erro ao processar foto {photo.filename}: {exc}")
@@ -232,8 +262,7 @@ def process_album_task(self, job_id: str):
             except Exception:
                 pass
 
-            # Determina a foto para usar como avatar (primeira detecção do cluster)
-            first_photo = all_detections[indices[0]][0]
+            first_crop_b64 = all_detections[indices[0]][3]
 
             cluster = Cluster.objects.create(
                 album=album,
@@ -241,12 +270,12 @@ def process_album_task(self, job_id: str):
                 face_count=len(indices),
                 identity=suggested_identity,
                 is_suggested=(suggested_identity is not None),
-                avatar_crop_webp=_crop_face_to_webp_url(str(first_photo.id)),
+                avatar_crop_webp=first_crop_b64 or "",
             )
 
             # 9. Cria Face records vinculando foto, embedding e cluster
             for i in indices:
-                photo_obj, emb, bbox = all_detections[i]
+                photo_obj, emb, bbox, _ = all_detections[i]
                 try:
                     Face.objects.create(
                         photo=photo_obj,
@@ -264,14 +293,15 @@ def process_album_task(self, job_id: str):
         # Faces de ruído (cluster -1) sem agrupamento
         noise_indices = [i for i, lbl in enumerate(cluster_labels) if lbl == -1]
         if noise_indices:
+            noise_crop_b64 = all_detections[noise_indices[0]][3]
             noise_cluster = Cluster.objects.create(
                 album=album,
                 label="Não Identificado",
                 face_count=len(noise_indices),
-                avatar_crop_webp=_crop_face_to_webp_url(str(all_detections[noise_indices[0]][0].id)),
+                avatar_crop_webp=noise_crop_b64 or "",
             )
             for i in noise_indices:
-                photo_obj, emb, bbox = all_detections[i]
+                photo_obj, emb, bbox, _ = all_detections[i]
                 try:
                     Face.objects.create(
                         photo=photo_obj,

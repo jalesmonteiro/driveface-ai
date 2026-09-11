@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from albums.models import Album
-from faces.models import Cluster, Identity, Photo
+from faces.models import Cluster, Face, Identity, Photo
 
 User = get_user_model()
 
@@ -118,3 +118,98 @@ class TestDemoLoginAndAlbums:
         assert not Album.objects.filter(id=album.id).exists()
         # Identity DEVE ter sido removida conforme solicitado pelo usuário
         assert not Identity.objects.filter(id=identity.id).exists()
+
+    def test_cluster_avatar_endpoint_cached(self, api_client):
+        """Valida que o endpoint de avatar retorna imagem em bytes a partir de base64 em cache."""
+        import base64
+        import io
+        from PIL import Image
+
+        user = User.objects.create_user(
+            email="avatar_user@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Avatar User",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_av_1",
+            folder_name="Álbum Avatar",
+        )
+
+        # Gera uma imagem 160x160 válida em memória
+        img = Image.new("RGB", (160, 160), color="blue")
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP")
+        b64_str = f"data:image/webp;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+
+        cluster = Cluster.objects.create(
+            album=album,
+            label="Pessoa Teste",
+            face_count=1,
+            avatar_crop_webp=b64_str,
+        )
+
+        res = api_client.get(f"/api/v1/faces/clusters/{cluster.id}/avatar/")
+        assert res.status_code == status.HTTP_200_OK
+        assert res["Content-Type"] == "image/webp"
+        assert len(res.content) > 0
+
+    def test_cluster_avatar_endpoint_dynamic_crop(self, api_client, monkeypatch):
+        """Valida que o endpoint recorta dinamicamente o rosto específico a partir da foto."""
+        import io
+        from PIL import Image
+
+        user = User.objects.create_user(
+            email="dynamic_crop@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Crop User",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_crop_1",
+            folder_name="Álbum Crop",
+        )
+        photo = Photo.objects.create(
+            album=album,
+            google_file_id="photo_group_1",
+            filename="foto_grupo.jpg",
+            width=1000,
+            height=1000,
+        )
+        cluster = Cluster.objects.create(
+            album=album,
+            label="Rosto Recortado",
+            face_count=1,
+            avatar_crop_webp="",
+        )
+        # Face em um canto específico da foto (ex: centro 40% a 60%)
+        Face.objects.create(
+            photo=photo,
+            cluster=cluster,
+            embedding=[0.0] * 512,
+            bbox_xmin=0.4,
+            bbox_ymin=0.4,
+            bbox_xmax=0.6,
+            bbox_ymax=0.6,
+            detection_confidence=0.95,
+        )
+
+        # Mock do download da imagem do Google Drive
+        def mock_download_stream(self, file_id):
+            img = Image.new("RGB", (1000, 1000), color="red")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            buf.seek(0)
+            return buf
+
+        from google_integration.services import GoogleDriveService
+        monkeypatch.setattr(GoogleDriveService, "download_image_stream", mock_download_stream)
+
+        res = api_client.get(f"/api/v1/faces/clusters/{cluster.id}/avatar/")
+        assert res.status_code == status.HTTP_200_OK
+        assert res["Content-Type"] == "image/webp"
+
+        # Verifica que o avatar recortado foi salvo em cache no banco
+        cluster.refresh_from_db()
+        assert cluster.avatar_crop_webp.startswith("data:image/webp;base64,")
+

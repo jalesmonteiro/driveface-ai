@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import include, path
 from albums.views import PhotoStreamView
+from faces.views import ClusterAvatarView
 
 
 def index_view(request):
@@ -80,5 +81,6 @@ urlpatterns = [
     path("api/v1/faces/", include("faces.urls")),
     path("api/v1/export/", include("export.urls")),
     path("api/v1/photos/<uuid:photo_id>/stream/", PhotoStreamView.as_view(), name="photo_stream_root"),
+    path("api/v1/clusters/<uuid:cluster_id>/avatar/", ClusterAvatarView.as_view(), name="cluster_avatar_root"),
 ]
 

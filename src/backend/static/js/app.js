@@ -775,7 +775,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const emoji = avatarEmojis[index % avatarEmojis.length];
       const isRealImg = cluster.avatar_webp && (cluster.avatar_webp.startsWith("/api/") || cluster.avatar_webp.startsWith("data:") || cluster.avatar_webp.startsWith("http"));
       const avatarHtml = isRealImg
-        ? `<img src="${cluster.avatar_webp}" class="cluster-avatar" style="object-fit: cover;" alt="${cluster.label}">`
+        ? `<img src="${cluster.avatar_webp}" class="cluster-avatar" style="object-fit: cover;" alt="${cluster.label}" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'cluster-avatar\\'>${emoji}</div>';">`
         : `<div class="cluster-avatar">${emoji}</div>`;
 
       return `

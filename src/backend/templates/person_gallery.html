@@ -132,14 +132,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         galleryLoading.style.display = "none";
 
+        // Configura o avatar da pessoa com o recorte facial específico (e não a foto inteira)
+        const avatarSrc = data.avatar_webp || `/api/v1/faces/clusters/${clusterId}/avatar/`;
+        personAvatarContainer.innerHTML = `<img src="${avatarSrc}" class="cluster-avatar" style="object-fit: cover; width: 100%; height: 100%;" alt="${currentClusterLabel}" onerror="this.onerror=null; this.parentElement.innerHTML='🧑';" />`;
+
         if (!data.photos || data.photos.length === 0) {
           galleryEmpty.style.display = "block";
           return;
-        }
-
-        // Configura avatar da pessoa com a primeira foto
-        if (data.photos[0]) {
-          personAvatarContainer.innerHTML = `<img src="${data.photos[0].stream_url}" class="cluster-avatar" style="object-fit: cover;" />`;
         }
 
         personPhotosGrid.style.display = "grid";

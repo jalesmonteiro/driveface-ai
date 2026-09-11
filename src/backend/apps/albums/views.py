@@ -22,9 +22,12 @@ class AlbumListView(generics.ListAPIView):
         data = []
         for alb in albums:
             cover_url = ""
-            first_cluster = alb.clusters.filter(avatar_crop_webp__isnull=False).exclude(avatar_crop_webp="").first()
-            if first_cluster and first_cluster.avatar_crop_webp:
-                cover_url = first_cluster.avatar_crop_webp
+            first_cluster = alb.clusters.first()
+            if first_cluster:
+                if first_cluster.avatar_crop_webp and first_cluster.avatar_crop_webp.startswith("data:image"):
+                    cover_url = first_cluster.avatar_crop_webp
+                else:
+                    cover_url = f"/api/v1/faces/clusters/{first_cluster.id}/avatar/"
             else:
                 first_photo = alb.photos.first()
                 if first_photo:
@@ -92,12 +95,17 @@ class ClusterPhotosListView(APIView):
             for p in photos
         ]
 
+        avatar = cluster.avatar_crop_webp
+        if not avatar or not avatar.startswith("data:image"):
+            avatar = f"/api/v1/faces/clusters/{cluster.id}/avatar/"
+
         return Response({
             "album_id": str(album.id),
             "album_name": album.folder_name,
             "cluster_id": str(cluster.id),
             "label": cluster.label,
             "face_count": cluster.face_count,
+            "avatar_webp": avatar,
             "photos": photos_data,
         })
 
@@ -127,11 +135,9 @@ class AlbumClustersListView(APIView):
         data = []
         for c in clusters:
             avatar = c.avatar_crop_webp
-            if not avatar:
-                # Tenta obter a primeira foto associada a uma face deste cluster
-                first_face = c.faces.select_related("photo").first()
-                if first_face and first_face.photo:
-                    avatar = f"/api/v1/photos/{first_face.photo.id}/stream/"
+            if not avatar or not avatar.startswith("data:image"):
+                # Recorte dinâmico da face específica da pessoa
+                avatar = f"/api/v1/faces/clusters/{c.id}/avatar/"
 
             data.append({
                 "id": str(c.id),
@@ -139,7 +145,7 @@ class AlbumClustersListView(APIView):
                 "label": c.label,
                 "face_count": c.face_count,
                 "is_suggested": c.is_suggested,
-                "avatar_webp": avatar or "",
+                "avatar_webp": avatar,
                 "created_at": c.created_at.isoformat(),
             })
 
