@@ -2111,5 +2111,261 @@ body {
   background: rgba(0, 0, 0, 0.2);
 }
 
+/* ==========================================================================
+   CARD DE FEEDBACK DE PROGRESSO EM TEMPO REAL (PROCESSAMENTO FACIAL)
+   ========================================================================== */
+.processing-progress-card {
+  grid-column: 1 / -1;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 2.2rem 2.5rem;
+  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+  max-width: 820px;
+  margin: 1.5rem auto 2.5rem;
+  animation: fadeIn 0.4s ease;
+}
+
+.processing-progress-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #6366f1);
+  background-size: 200% 100%;
+  animation: shimmerBorder 3s linear infinite;
+}
+
+@keyframes shimmerBorder {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+.progress-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.progress-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.4rem 0.9rem;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #c7d2fe;
+}
+
+.pulse-radar-dot {
+  width: 9px;
+  height: 9px;
+  background: #6366f1;
+  border-radius: 50%;
+  position: relative;
+}
+
+.pulse-radar-dot::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  border: 2px solid #818cf8;
+  animation: radarPulse 1.6s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+@keyframes radarPulse {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.progress-pct-display {
+  font-size: 2rem;
+  font-weight: 800;
+  font-family: var(--font-family-mono, monospace);
+  background: linear-gradient(135deg, #a5b4fc, #c084fc, #f472b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.progress-title-block {
+  margin-bottom: 1.5rem;
+}
+
+.progress-headline {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-subtext {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Barra de Progresso Estilizada */
+.progress-track-wrapper {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  height: 14px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 1.75rem;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.progress-fill-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #4f46e5, #7c3aed, #db2777);
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.6);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  min-width: 8px;
+}
+
+.progress-fill-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: progressShine 2s infinite linear;
+}
+
+@keyframes progressShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Métricas e Contadores */
+.progress-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+@media (max-width: 640px) {
+  .progress-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.progress-metric-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  text-align: center;
+}
+
+.metric-caption {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.metric-val {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  display: block;
+}
+
+/* Etapas do Pipeline */
+.progress-steps-list {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.progress-step-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0;
+}
+
+.progress-step-row.completed {
+  color: #34d399;
+}
+
+.progress-step-row.active {
+  color: #c7d2fe;
+  font-weight: 600;
+}
+
+.progress-step-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-status-tag {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.step-status-tag.waiting {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+.step-status-tag.active {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+}
+
+.step-status-tag.done {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.progress-footer-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 
 

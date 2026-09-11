@@ -213,3 +213,60 @@ class TestDemoLoginAndAlbums:
         cluster.refresh_from_db()
         assert cluster.avatar_crop_webp.startswith("data:image/webp;base64,")
 
+    def test_album_clusters_returns_job_progress(self, api_client):
+        """Valida que a rota /api/v1/albums/<id>/clusters/ retorna o objeto de job com métricas de progresso."""
+        from albums.models import Job
+
+        user = User.objects.create_user(
+            email="progress_tester@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Progress Tester",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_prog_1",
+            folder_name="Álbum com Progresso",
+        )
+        job = Job.objects.create(
+            album=album,
+            status=Job.Status.PROCESSING,
+            total_images=50,
+            processed_images=25,
+        )
+
+        api_client.force_authenticate(user=user)
+        res = api_client.get(f"/api/v1/albums/{album.id}/clusters/")
+        assert res.status_code == status.HTTP_200_OK
+        data = res.json()
+        assert "job" in data
+        assert data["job"]["status"] == "PROCESSING"
+        assert data["job"]["total_images"] == 50
+        assert data["job"]["processed_images"] == 25
+        assert data["job"]["progress_percentage"] == 50.0
+
+    def test_album_reprocess_endpoint(self, api_client, monkeypatch):
+        """Valida que o endpoint /api/v1/albums/<id>/reprocess/ dispara o job na fila."""
+        user = User.objects.create_user(
+            email="reprocess_tester@driveface.ai",
+            password="StrongPassword123!",
+            full_name="Reprocess Tester",
+        )
+        album = Album.objects.create(
+            owner=user,
+            google_drive_folder_id="drive_reproc_1",
+            folder_name="Álbum Reprocess",
+        )
+
+        # Mock Celery delay
+        mock_called = []
+        from vision_pipeline.tasks import process_album_task
+        monkeypatch.setattr(process_album_task, "delay", lambda job_id: mock_called.append(job_id))
+
+        api_client.force_authenticate(user=user)
+        res = api_client.post(f"/api/v1/albums/{album.id}/reprocess/")
+        assert res.status_code == status.HTTP_202_ACCEPTED
+        data = res.json()
+        assert data["status"] == "PENDING"
+        assert len(mock_called) == 1
+
+

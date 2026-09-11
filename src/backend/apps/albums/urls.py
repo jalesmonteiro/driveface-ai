@@ -9,12 +9,14 @@ from .views import (
     PhotoStreamView,
     AlbumShareManageView,
     SharedAlbumDetailView,
+    AlbumReprocessView,
 )
 
 urlpatterns = [
     path("", AlbumListView.as_view(), name="album_list"),
     path("process/", ProcessAlbumView.as_view(), name="album_process"),
     path("<uuid:album_id>/", AlbumDetailView.as_view(), name="album_detail"),
+    path("<uuid:album_id>/reprocess/", AlbumReprocessView.as_view(), name="album_reprocess"),
     path("<uuid:album_id>/clusters/", AlbumClustersListView.as_view(), name="album_clusters"),
     path(
         "<uuid:album_id>/clusters/<uuid:cluster_id>/photos/",

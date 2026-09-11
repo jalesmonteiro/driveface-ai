@@ -520,6 +520,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Alterna para a visão da grade de álbuns
   function showAlbumsList() {
+    if (typeof albumPollingTimer !== "undefined" && albumPollingTimer) {
+      clearTimeout(albumPollingTimer);
+      albumPollingTimer = null;
+    }
     if (albumsView) albumsView.style.display = "block";
     if (albumDetailView) albumDetailView.style.display = "none";
     state.currentAlbumId = null;
@@ -542,6 +546,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   btnBackToAlbums?.addEventListener("click", () => {
     showAlbumsList();
+  });
+
+  const btnReprocessCurrentAlbum = document.getElementById("btnReprocessCurrentAlbum");
+  btnReprocessCurrentAlbum?.addEventListener("click", () => {
+    if (!state.currentAlbumId) return;
+    reprocessCurrentAlbum(state.currentAlbumId);
   });
 
   btnDeleteCurrentAlbum?.addEventListener("click", () => {
@@ -691,15 +701,40 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   window.loadUserAlbums = window.initAlbumsPage;
 
-  async function loadAlbumClusters(albumId) {
-    if (!clustersGrid) return;
+  let albumPollingTimer = null;
 
-    clustersGrid.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem;">
-        <div class="drive-spinner" style="margin: 0 auto 1rem;"></div>
-        <p class="text-muted">Carregando grupos de faces identificadas...</p>
-      </div>
-    `;
+  async function reprocessCurrentAlbum(albumId) {
+    const targetId = albumId || state.currentAlbumId;
+    if (!targetId) return;
+    try {
+      showToast("Solicitando processamento facial com IA...", "success");
+      const res = await (window.authFetch || fetch)(`/api/v1/albums/${targetId}/reprocess/`, { method: "POST" });
+      if (res.ok) {
+        showToast("Processamento iniciado! Acompanhe o progresso em tempo real.", "success");
+        loadAlbumClusters(targetId);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.message || err.error || "Não foi possível reiniciar o processamento.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Erro ao comunicar com o servidor.", "error");
+    }
+  }
+  window.reprocessCurrentAlbum = reprocessCurrentAlbum;
+
+  async function loadAlbumClusters(albumId, isSilentPoll = false) {
+    if (!clustersGrid) return;
+    clearTimeout(albumPollingTimer);
+
+    if (!isSilentPoll) {
+      clustersGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem;">
+          <div class="drive-spinner" style="margin: 0 auto 1rem;"></div>
+          <p class="text-muted">Carregando dados do álbum...</p>
+        </div>
+      `;
+    }
 
     try {
       const res = await (window.authFetch || fetch)(`/api/v1/albums/${albumId}/clusters/`);
@@ -710,10 +745,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentAlbumTitle && data.folder_name) {
           currentAlbumTitle.innerText = data.folder_name;
         }
-        if (currentAlbumBadge && state.currentClusters) {
-          currentAlbumBadge.innerText = `${state.currentClusters.length} pessoas`;
+
+        const job = data.job || null;
+        const jobStatus = job ? job.status : (data.job_status || null);
+        const isProcessing = jobStatus === "PENDING" || jobStatus === "PROCESSING";
+
+        if (currentAlbumBadge) {
+          if (isProcessing) {
+            const pct = (job && job.progress_percentage !== undefined) ? job.progress_percentage : 0;
+            currentAlbumBadge.innerHTML = `<span class="pulse-radar-dot" style="display:inline-block; margin-right:6px;"></span>Processando (${pct}%)`;
+            currentAlbumBadge.className = "badge badge-warning";
+          } else {
+            currentAlbumBadge.innerText = `${state.currentClusters.length} pessoas`;
+            currentAlbumBadge.className = "badge badge-success";
+          }
         }
-        renderClusters(state.currentClusters, data.folder_name, data.job_status, data.job_error);
+
+        renderClusters(state.currentClusters, data.folder_name, jobStatus, data.job_error, job, albumId);
+
+        // Auto-polling em tempo real a cada 2.5s se estiver processando
+        if (isProcessing && state.currentAlbumId === albumId) {
+          albumPollingTimer = setTimeout(() => {
+            loadAlbumClusters(albumId, true);
+          }, 2500);
+        } else if (!isProcessing && isSilentPoll && jobStatus === "COMPLETED") {
+          showToast("🎉 Processamento concluído! Pessoas identificadas.", "success");
+        }
       } else {
         clustersGrid.innerHTML = `
           <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem;">
@@ -733,44 +790,173 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const avatarEmojis = ["👩", "👨", "👩‍🦰", "🧑", "👱‍♂️", "🧔", "👧", "👦"];
 
-  function renderClusters(clusters = [], albumName = "", jobStatus = null, jobError = null) {
+  function renderClusters(clusters = [], albumName = "", jobStatus = null, jobError = null, job = null, albumId = "") {
     if (!clustersGrid) return;
 
-    if (!clusters || clusters.length === 0) {
-      let statusIcon = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem; display: block; opacity: 0.5;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
-      let statusTitle = "Nenhuma pessoa agrupada neste álbum";
-      let statusDesc = "O processamento deste álbum ainda não detectou faces ou está na fila.";
-      let extraBtn = "";
+    const isProcessing = jobStatus === "PENDING" || jobStatus === "PROCESSING";
 
-      if (jobStatus === "PROCESSING") {
-        statusIcon = `<div class="drive-spinner" style="margin: 0 auto 1.5rem; width: 48px; height: 48px;"></div>`;
-        statusTitle = "🔄 Processando faces...";
-        statusDesc = "O pipeline de detecção facial está em execução. Atualize a página em alguns minutos.";
-        extraBtn = `<button class="btn btn-secondary btn-sm" style="margin-top: 1rem;" onclick="loadAlbumClusters('${state.currentAlbumId}')">Verificar agora</button>`;
-      } else if (jobStatus === "PENDING") {
-        statusIcon = `<div style="font-size: 3rem; margin-bottom: 1rem;">⏳</div>`;
-        statusTitle = "Na fila de processamento";
-        statusDesc = "O álbum aguarda na fila do worker. Em breve o processamento iniciará.";
-      } else if (jobStatus === "FAILED") {
-        statusIcon = `<div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>`;
-        statusTitle = "Processamento falhou";
-        statusDesc = jobError ? `Erro: ${jobError}` : "Ocorreu um erro durante o processamento. Tente processar a pasta novamente.";
-        extraBtn = `<a href="/process/" class="btn btn-primary btn-sm" style="margin-top: 1rem;">Reprocessar Pasta</a>`;
-      } else if (!jobStatus) {
-        extraBtn = `<a href="/process/" class="btn btn-primary btn-sm" style="margin-top: 1rem;">Processar uma Pasta</a>`;
+    // 1. ESTADO DE PROCESSAMENTO ATIVO OU NA FILA (FEEDBACK EM TEMPO REAL)
+    if (isProcessing) {
+      const pct = (job && job.progress_percentage !== undefined) ? job.progress_percentage : 0;
+      const total = job ? (job.total_images || 0) : 0;
+      const processed = job ? (job.processed_images || 0) : 0;
+
+      let headline = "Detectando Rostos e Analisando Fotos";
+      let subtext = "Conectando ao Google Drive e inicializando rede neural InsightFace...";
+      let stepDriveState = "Pronto";
+      let stepDriveClass = "done";
+      let stepVisionState = "Aguardando...";
+      let stepVisionClass = "waiting";
+      let stepBioState = "Aguardando...";
+      let stepBioClass = "waiting";
+      let stepClusterState = "Aguardando...";
+      let stepClusterClass = "waiting";
+
+      if (jobStatus === "PENDING") {
+        headline = "Aguardando Início do Processamento";
+        subtext = "O álbum está na fila de execução do Celery worker e iniciará em instantes.";
+        stepDriveState = "Na fila...";
+        stepDriveClass = "active";
+      } else if (total > 0 && processed < total) {
+        headline = `Processando Fotos com IA (${processed} de ${total})`;
+        subtext = `Baixando fotos em memória volátil, detectando faces e extraindo biometria ArcFace...`;
+        stepDriveState = `${total} fotos listadas`;
+        stepDriveClass = "done";
+        stepVisionState = `Foto ${processed} de ${total}`;
+        stepVisionClass = "active";
+        stepBioState = "Extraindo 512-D";
+        stepBioClass = "active";
+      } else if (total > 0 && processed >= total) {
+        headline = "Agrupando Rostos Identificados (Clustering)";
+        subtext = "Executando agrupamento DBSCAN por similaridade de cosseno e gerando identidades biométricas...";
+        stepDriveState = `${total} fotos listadas`;
+        stepDriveClass = "done";
+        stepVisionState = "100% analisado";
+        stepVisionClass = "done";
+        stepBioState = "Embeddings prontos";
+        stepBioClass = "done";
+        stepClusterState = "Calculando centróides...";
+        stepClusterClass = "active";
       }
 
       clustersGrid.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align: center; padding: 3.5rem 1rem; color: var(--text-muted);">
-          ${statusIcon}
-          <h4 style="color: #fff; margin-bottom: 0.5rem;">${statusTitle}</h4>
-          <p>${statusDesc}</p>
-          ${extraBtn}
+        <div class="processing-progress-card glass">
+          <div class="progress-card-top">
+            <div class="progress-live-pill">
+              <span class="pulse-radar-dot"></span>
+              <span>${jobStatus === "PENDING" ? "Na fila do worker" : "Processamento Ativo com IA"}</span>
+            </div>
+            <div class="progress-pct-display">${pct}%</div>
+          </div>
+
+          <div class="progress-title-block">
+            <h3 class="progress-headline">
+              <div class="drive-spinner" style="width: 22px; height: 22px; border-width: 2px;"></div>
+              ${headline}
+            </h3>
+            <p class="progress-subtext">${subtext}</p>
+          </div>
+
+          <!-- Barra de Progresso com Brilho Dinâmico -->
+          <div class="progress-track-wrapper">
+            <div class="progress-fill-bar" style="width: ${Math.max(6, pct)}%;"></div>
+          </div>
+
+          <!-- Métricas em Tempo Real -->
+          <div class="progress-metrics-grid">
+            <div class="progress-metric-box">
+              <span class="metric-caption">Fotos Analisadas</span>
+              <span class="metric-val">${processed} / ${total > 0 ? total : '...'}</span>
+            </div>
+            <div class="progress-metric-box">
+              <span class="metric-caption">Estado da Fila</span>
+              <span class="metric-val" style="font-size: 1.05rem; color: #a5b4fc;">
+                ${jobStatus === "PENDING" ? "⏳ Aguardando" : "⚡ Em Execução"}
+              </span>
+            </div>
+            <div class="progress-metric-box">
+              <span class="metric-caption">Algoritmo</span>
+              <span class="metric-val" style="font-size: 1rem; color: #f472b6;">InsightFace 512-D</span>
+            </div>
+          </div>
+
+          <!-- Etapas Detalhadas do Pipeline -->
+          <div class="progress-steps-list">
+            <div class="progress-step-row ${stepDriveClass}">
+              <div class="progress-step-left">
+                <span>📁</span>
+                <span>Google Drive: Varredura de Fotos</span>
+              </div>
+              <span class="step-status-tag ${stepDriveClass}">${stepDriveState}</span>
+            </div>
+            <div class="progress-step-row ${stepVisionClass}">
+              <div class="progress-step-left">
+                <span>🤖</span>
+                <span>Detecção Facial (InsightFace Buffalo_SC)</span>
+              </div>
+              <span class="step-status-tag ${stepVisionClass}">${stepVisionState}</span>
+            </div>
+            <div class="progress-step-row ${stepBioClass}">
+              <div class="progress-step-left">
+                <span>🧬</span>
+                <span>Extração de Embeddings Normalizados L2</span>
+              </div>
+              <span class="step-status-tag ${stepBioClass}">${stepBioState}</span>
+            </div>
+            <div class="progress-step-row ${stepClusterClass}">
+              <div class="progress-step-left">
+                <span>👥</span>
+                <span>Agrupamento DBSCAN & Recorte Facial 160x160</span>
+              </div>
+              <span class="step-status-tag ${stepClusterClass}">${stepClusterState}</span>
+            </div>
+          </div>
+
+          <div class="progress-footer-note">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="pulse-radar-dot" style="background: #10b981;"></span>
+              <span>Atualização automática a cada 2s &bull; Você pode aguardar nesta tela</span>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="reprocessCurrentAlbum('${albumId || state.currentAlbumId}')" title="Reiniciar fila caso necessário" style="padding: 0.35rem 0.85rem; font-size: 0.82rem;">
+              Reiniciar Processamento
+            </button>
+          </div>
         </div>
       `;
       return;
     }
 
+    // 2. ESTADO DE FALHA
+    if (jobStatus === "FAILED" && (!clusters || clusters.length === 0)) {
+      clustersGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 3.5rem 1rem; color: var(--text-muted);">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+          <h4 style="color: #fff; margin-bottom: 0.5rem;">O processamento deste álbum falhou</h4>
+          <p>${jobError ? `Erro: ${jobError}` : "Ocorreu uma falha durante a execução do pipeline de visão computacional."}</p>
+          <button class="btn btn-primary btn-sm" style="margin-top: 1rem;" onclick="reprocessCurrentAlbum('${albumId || state.currentAlbumId}')">
+            Tentar Reprocessar Novamente
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // 3. ESTADO VAZIO (NENHUMA FACE DETECTADA)
+    if (!clusters || clusters.length === 0) {
+      clustersGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 3.5rem 1rem; color: var(--text-muted);">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem; display: block; opacity: 0.5;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <h4 style="color: #fff; margin-bottom: 0.5rem;">Nenhuma pessoa agrupada neste álbum</h4>
+          <p>O processamento foi concluído, mas nenhuma face com nitidez suficiente foi detectada.</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top: 1rem;" onclick="reprocessCurrentAlbum('${albumId || state.currentAlbumId}')">
+            Reprocessar Álbum
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // 4. GRADE DE PESSOAS RECONHECIDAS
     clustersGrid.innerHTML = clusters.map((cluster, index) => {
       const emoji = avatarEmojis[index % avatarEmojis.length];
       const isRealImg = cluster.avatar_webp && (cluster.avatar_webp.startsWith("/api/") || cluster.avatar_webp.startsWith("data:") || cluster.avatar_webp.startsWith("http"));

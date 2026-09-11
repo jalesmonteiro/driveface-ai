@@ -96,11 +96,15 @@ def _get_face_app():
 # ---------------------------------------------------------------------------
 
 @shared_task(bind=True, name="vision_pipeline.process_album_task")
-def process_album_task(self, job_id: str):
+def process_album_task(self, job_id: str = None):
     """
     Orquestra o download em stream volátil, detecção, extração ArcFace,
     agrupamento DBSCAN e auto-sugestão com isolamento de tenant.
     """
+    if job_id is None and not hasattr(self, "request"):
+        job_id = str(self)
+    else:
+        job_id = str(job_id)
     import django
     django.setup()
 

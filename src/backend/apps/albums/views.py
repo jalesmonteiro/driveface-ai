@@ -132,6 +132,26 @@ class AlbumClustersListView(APIView):
         job_status = last_job.status if last_job else None
         job_error = last_job.error_message if last_job else None
 
+        job_info = None
+        if last_job:
+            progress_pct = 0.0
+            if last_job.total_images > 0:
+                progress_pct = round((last_job.processed_images / last_job.total_images) * 100.0, 1)
+            elif last_job.status == Job.Status.COMPLETED:
+                progress_pct = 100.0
+
+            job_info = {
+                "id": str(last_job.id),
+                "status": last_job.status,
+                "total_images": last_job.total_images,
+                "processed_images": last_job.processed_images,
+                "progress_percentage": progress_pct,
+                "error_message": last_job.error_message,
+                "created_at": last_job.created_at.isoformat() if last_job.created_at else None,
+                "started_at": last_job.started_at.isoformat() if last_job.started_at else None,
+                "finished_at": last_job.finished_at.isoformat() if last_job.finished_at else None,
+            }
+
         data = []
         for c in clusters:
             avatar = c.avatar_crop_webp
@@ -157,6 +177,7 @@ class AlbumClustersListView(APIView):
             "clusters": data,
             "job_status": job_status,
             "job_error": job_error,
+            "job": job_info,
         })
 
 
@@ -176,6 +197,15 @@ class ProcessAlbumView(APIView):
 
         job = Job.objects.create(album=album, status=Job.Status.PENDING)
 
+        # Dispara a tarefa Celery de processamento assíncrono
+        from vision_pipeline.tasks import process_album_task
+        try:
+            process_album_task.delay(str(job.id))
+        except Exception as e:
+            import logging, threading
+            logging.getLogger(__name__).warning(f"Celery delay falhou ({e}), executando em background thread...")
+            threading.Thread(target=process_album_task, args=(str(job.id),), daemon=True).start()
+
         return Response(
             {
                 "job_id": str(job.id),
@@ -183,6 +213,60 @@ class ProcessAlbumView(APIView):
                 "folder_name": album.folder_name,
                 "status": job.status,
                 "message": "Processamento facial agendado na fila com sucesso.",
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class AlbumReprocessView(APIView):
+    """
+    POST /api/v1/albums/<album_id>/reprocess/
+    Reinicia ou dispara o processamento facial do álbum.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAlbumOwner]
+
+    def post(self, request, album_id):
+        album = generics.get_object_or_404(Album, id=album_id)
+        self.check_object_permissions(request, album)
+
+        from vision_pipeline.tasks import process_album_task
+
+        # Se já existe um job PENDING ou PROCESSING, tenta acionar e retorna
+        running_job = album.jobs.filter(status__in=[Job.Status.PENDING, Job.Status.PROCESSING]).first()
+        if running_job:
+            try:
+                process_album_task.delay(str(running_job.id))
+            except Exception as e:
+                import logging, threading
+                logging.getLogger(__name__).warning(f"Celery delay falhou ({e}), executando em thread...")
+                threading.Thread(target=process_album_task, args=(str(running_job.id),), daemon=True).start()
+
+            return Response(
+                {
+                    "job_id": str(running_job.id),
+                    "album_id": str(album.id),
+                    "folder_name": album.folder_name,
+                    "status": running_job.status,
+                    "message": "Processamento em andamento retomado com sucesso.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        job = Job.objects.create(album=album, status=Job.Status.PENDING)
+        try:
+            process_album_task.delay(str(job.id))
+        except Exception as e:
+            import logging, threading
+            logging.getLogger(__name__).warning(f"Celery delay falhou ({e}), executando em background thread...")
+            threading.Thread(target=process_album_task, args=(str(job.id),), daemon=True).start()
+
+        return Response(
+            {
+                "job_id": str(job.id),
+                "album_id": str(album.id),
+                "folder_name": album.folder_name,
+                "status": job.status,
+                "message": "Processamento facial reiniciado com sucesso.",
             },
             status=status.HTTP_202_ACCEPTED,
         )
