@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DriveFace AI — Agrupamento Facial Inteligente para Google Drive</title>
+  <meta name="description" content="Sistema multi-usuário para agrupamento facial e indexação automática em fotos do Google Drive com Deep Learning (RetinaFace, ArcFace) e PostgreSQL pgvector.">
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="dark-theme">
+  <!-- Glow Background Effect -->
+  <div class="bg-glow top-left"></div>
+  <div class="bg-glow bottom-right"></div>
+
+  <!-- Header / Navigation -->
+  <header class="app-header" id="mainHeader">
+    <div class="header-container">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
+            <circle cx="12" cy="12" r="3" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <span class="logo-brand">DriveFace<span class="gradient-text">.AI</span></span>
+          <span class="logo-badge">PostgreSQL pgvector 512-d</span>
+        </div>
+      </div>
+
+      <!-- Live Service Status Pill -->
+      <div class="system-status-pill" id="systemStatusPill" title="PostgreSQL + pgvector, Redis & Celery">
+        <span class="status-dot online"></span>
+        <span class="status-label">Serviços Ativos</span>
+      </div>
+
+      <!-- Navigation Tabs (Only visible when user is LOGGED IN) -->
+      <nav class="nav-links hidden" id="mainNav">
+        <button class="nav-item active" data-tab="tab-dashboard" id="navDashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-tab="tab-process" id="navProcess">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+          Processar Pasta
+        </button>
+        <button class="nav-item" data-tab="tab-clusters" id="navClusters">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+          Pessoas & Faces
+        </button>
+        <button class="nav-item" data-tab="tab-shares" id="navShares">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+          Compartilhar
+        </button>
+      </nav>
+
+      <!-- User Auth Section -->
+      <div class="user-auth-area" id="userAuthArea">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+
+    <!-- ====================================================================
+         PUBLIC VIEW (When user is NOT logged in)
+         ==================================================================== -->
+    <section class="public-landing-view" id="publicLandingView">
+      <div class="landing-hero glass">
+        <div class="landing-badge">
+          <span class="sparkle">✨</span> Acesso Exclusivo via Google
+        </div>
+        <h1 class="landing-title">
+          Agrupamento Facial com Deep Learning em fotos do <span class="gradient-text">Google Drive</span>
+        </h1>
+        <p class="landing-subtitle">
+          Faça login com sua conta do Google para conectar suas pastas de fotos. O sistema utiliza <strong>RetinaFace</strong> e <strong>ArcFace</strong> para agrupar pessoas automaticamente em centróides vetoriais de 512 dimensões com <strong>PostgreSQL pgvector</strong>.
+        </p>
+
+        <div class="google-auth-box">
+          <button class="btn btn-google btn-lg" id="btnGoogleLoginMain">
+            <svg width="22" height="22" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+              <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2s.7 5.5 1.9 7.9l3.7-2.9z"/>
+              <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+            </svg>
+            Entrar com Google
+          </button>
+          <span class="auth-note">Cadastro instantâneo via API oficial do Google. Não armazenamos senhas.</span>
+        </div>
+
+        <div class="demo-fallback-box">
+          <span class="text-muted" style="font-size: 0.85rem;">Desenvolvendo localmente sem credenciais Google?</span>
+          <button class="btn btn-secondary btn-sm" id="btnDemoLogin">
+            Simular Acesso com Conta Google (Demonstração)
+          </button>
+        </div>
+      </div>
+
+      <!-- Feature Cards -->
+      <div class="features-grid">
+        <div class="feature-card glass">
+          <div class="feature-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+          </div>
+          <h3>Modelos de Visão de Ponta</h3>
+          <p>RetinaFace com SCRFD para detecção anatômica precisa de 5 pontos faciais e ArcFace para embeddings normalizados L2 de 512 dimensões.</p>
+        </div>
+
+        <div class="feature-card glass">
+          <div class="feature-icon cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg>
+          </div>
+          <h3>PostgreSQL 16 + pgvector</h3>
+          <p>Busca vetorial por similaridade de cosseno direto no banco de dados com índices HNSW. Performance de milissegundos sem bancos separados.</p>
+        </div>
+
+        <div class="feature-card glass">
+          <div class="feature-icon emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Streaming Volátil em RAM</h3>
+          <p>As fotos são lidas em buffer de memória (io.BytesIO) diretamente da Google Drive API v3 e nunca salvas em disco físico, garantindo privacidade máxima.</p>
+        </div>
+      </div>
+
+      <!-- Google Cloud Configuration Guide (Callout) -->
+      <div class="config-guide-card glass">
+        <div class="guide-header">
+          <div class="guide-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>
+          </div>
+          <h4>Como registrar a aplicação no Google Cloud Console:</h4>
+        </div>
+        <div class="guide-body">
+          <p>Para ativar a integração real com o Google Drive e o login automático, você deve registrar o projeto no Google Cloud e adicionar 3 chaves ao seu arquivo <code>.env</code>:</p>
+          <pre class="code-block font-mono">GOOGLE_CLIENT_ID=seu_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=seu_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/google/oauth/callback/</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         AUTHENTICATED APP VIEWS (Visible only when user is LOGGED IN)
+         ==================================================================== -->
+    <div class="authenticated-container hidden" id="authenticatedContainer">
+
+      <!-- TAB 1: DASHBOARD -->
+      <section class="tab-pane active" id="tab-dashboard">
+        <div class="hero-section">
+          <div class="hero-content">
+            <div class="hero-badge">
+              <span class="sparkle">✨</span> Deep Learning & Vector Search Engine
+            </div>
+            <h1 class="hero-title">
+              Painel de Controle — <span class="gradient-text" id="userGreetingName">DriveFace AI</span>
+            </h1>
+            <p class="hero-subtitle">
+              Sua conta do Google está conectada. Processe novas pastas de fotos, gerencie clusters de pessoas e compartilhe álbuns com controle de acesso.
+            </p>
+
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-lg" id="btnHeroProcess">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                Iniciar Agrupamento de Pasta
+              </button>
+              <button class="btn btn-secondary btn-lg" id="btnHeroGoClusters">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/></svg>
+                Ver Pessoas Agrupadas
+              </button>
+            </div>
+          </div>
+
+          <!-- Metrics Cards -->
+          <div class="metrics-grid">
+            <div class="metric-card glass">
+              <div class="metric-icon purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-value">512-D</span>
+                <span class="metric-label">Espaço Vetorial L2 (ArcFace)</span>
+              </div>
+            </div>
+
+            <div class="metric-card glass">
+              <div class="metric-icon cyan">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-value">DBSCAN</span>
+                <span class="metric-label">Clustering por Cosseno</span>
+              </div>
+            </div>
+
+            <div class="metric-card glass">
+              <div class="metric-icon emerald">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-value">Multi-Tenant</span>
+                <span class="metric-label">Isolamento Estrito por Conta</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Jobs Status Widget -->
+        <div class="dashboard-widget glass">
+          <div class="widget-header">
+            <div class="widget-title">
+              <span class="pulse-indicator"></span>
+              <h3>Fila de Processamento Facial (Celery / Redis)</h3>
+            </div>
+            <span class="badge badge-neutral">Monitorando</span>
+          </div>
+          <div class="widget-body" id="dashboardJobsList">
+            <div class="empty-state">
+              <p>Nenhuma tarefa de processamento em andamento no momento.</p>
+              <button class="btn btn-secondary btn-sm" id="btnQuickNewJob">Iniciar Novo Processamento</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: PROCESSAR PASTA -->
+      <section class="tab-pane" id="tab-process">
+        <div class="page-header">
+          <h2>Processar Nova Pasta do Google Drive</h2>
+          <p>Informe o identificador da pasta pública ou autenticada para extrair faces, calcular embeddings e agrupar pessoas.</p>
+        </div>
+
+        <div class="form-container glass">
+          <!-- Seletor Visual do Google Drive -->
+          <div class="drive-folder-selector-box glass">
+            <div class="selector-header">
+              <div class="selector-title">
+                <svg width="28" height="28" viewBox="0 0 87.3 78" class="drive-logo-svg">
+                  <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                  <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+                  <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
+                  <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                  <path d="m59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5l-13.75-23.8c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8z" fill="#ffba00"/>
+                  <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.1 27.9h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#2684fc"/>
+                </svg>
+                <div>
+                  <h4>Origem das Fotos: Google Drive</h4>
+                  <p>Escolha visualmente uma pasta do seu Drive ou navegue pela árvore de diretórios.</p>
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary" id="btnOpenDrivePicker">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                Navegar no Google Drive...
+              </button>
+            </div>
+
+            <!-- Card exibido quando a pasta é selecionada -->
+            <div class="selected-folder-banner" id="selectedFolderBanner" style="display: none;">
+              <div class="banner-folder-icon">📁</div>
+              <div class="banner-folder-details">
+                <div class="banner-folder-name" id="displayFolderName">Nome da Pasta</div>
+                <div class="banner-folder-id" id="displayFolderId">ID: 1A2b3c...</div>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnChangeSelectedFolder">Trocar Pasta</button>
+            </div>
+          </div>
+
+          <form id="formProcessAlbum">
+            <div class="form-group" style="margin-top: 1.5rem;">
+              <label for="folderNameInput">Nome do Álbum / Evento</label>
+              <input type="text" id="folderNameInput" class="form-control" placeholder="Ex: Formatura Turma 2026, Aniversário" required>
+              <span class="form-help">Nome de exibição amigável para este conjunto de fotos (preenchido automaticamente ao selecionar do Drive).</span>
+            </div>
+
+            <!-- Toggle de inserção manual de ID/URL -->
+            <div class="manual-id-toggle-wrap">
+              <button type="button" class="btn-link" id="btnToggleManualId">
+                <span id="manualIdToggleIcon">▸</span> Inserir ID ou link do Google Drive manualmente
+              </button>
+              <div class="manual-id-collapsible" id="manualIdCollapsible" style="display: none;">
+                <div class="form-group" style="margin-top: 0.75rem;">
+                  <label for="folderIdInput">ID da Pasta no Google Drive</label>
+                  <input type="text" id="folderIdInput" class="form-control font-mono" placeholder="Ex: 1A2b3C4d5E6f7G8h9I0jKlMnOp" required>
+                  <span class="form-help">Copie o ID que aparece após <code>drive.google.com/drive/folders/<strong>ID_AQUI</strong></code> ou selecione no botão acima.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 1.5rem;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoSuggestCheck" checked>
+                <span>Ativar auto-sugestão com base em identidades cadastradas anteriormente (Centróides L2)</span>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-lg" id="btnSubmitProcess">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Iniciar Pipeline de Visão
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Live Job Tracker Box -->
+        <div class="job-tracker-card glass hidden" id="jobTrackerCard">
+          <div class="tracker-header">
+            <div>
+              <h4 id="trackerAlbumTitle">Processando Álbum...</h4>
+              <span class="tracker-job-id font-mono" id="trackerJobId">Job: #---</span>
+            </div>
+            <span class="badge badge-processing" id="trackerStatusBadge">Processando</span>
+          </div>
+
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="progressBarFill" style="width: 15%;"></div>
+          </div>
+
+          <div class="tracker-stats">
+            <div class="stat-item">
+              <span class="stat-label">Progresso</span>
+              <span class="stat-value" id="trackerPercentage">0%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Fotos Analisadas</span>
+              <span class="stat-value" id="trackerPhotosCount">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Faces Detectadas</span>
+              <span class="stat-value" id="trackerFacesCount">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Pessoas Agrupadas</span>
+              <span class="stat-value" id="trackerPeopleCount">0</span>
+            </div>
+          </div>
+
+          <div class="tracker-footer">
+            <span class="tracker-step-desc" id="trackerStepDesc">Iniciando streaming volátil em RAM...</span>
+            <button class="btn btn-secondary btn-sm hidden" id="btnViewCompletedAlbum">Ver Álbum Agrupado</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: PESSOAS & CLUSTERS -->
+      <section class="tab-pane" id="tab-clusters">
+        <div class="page-header flex-between">
+          <div>
+            <h2>Pessoas Identificadas & Clusters</h2>
+            <p>Rostos agrupados por proximidade vetorial de cosseno ($d \le 0.40$). Atribua nomes para treinar a auto-sugestão.</p>
+          </div>
+          <div class="header-actions">
+            <select class="form-control select-sm" id="albumSelector">
+              <option value="" disabled selected>Carregando álbuns...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Clusters Grid -->
+        <div class="clusters-grid" id="clustersGrid">
+          <!-- Dynamic Cards Inserted via JS -->
+        </div>
+      </section>
+
+      <!-- TAB 4: COMPARTILHAMENTO & WHITELIST -->
+      <section class="tab-pane" id="tab-shares">
+        <div class="page-header">
+          <h2>Compartilhamento Seguro & Controle de Acesso (ACL)</h2>
+          <p>Gere links com token seguro e gerencie a lista de e-mails autorizados a visualizar as fotos.</p>
+        </div>
+
+        <div class="share-card glass">
+          <div class="share-section">
+            <h3>Link de Compartilhamento do Álbum</h3>
+            <p class="text-muted">Apenas convidados com e-mail cadastrado na whitelist conseguirão abrir este link.</p>
+            
+            <div class="copy-input-group">
+              <input type="text" readonly class="form-control font-mono" id="shareUrlInput" value="http://localhost:8000/api/v1/albums/shared/sh_9f8e7d6c5b4a3f2e/">
+              <button class="btn btn-primary" id="btnCopyShareLink">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                Copiar Link
+              </button>
+            </div>
+          </div>
+
+          <hr class="divider">
+
+          <div class="whitelist-section">
+            <h3>Whitelist de E-mails Autorizados</h3>
+            <div class="add-email-bar">
+              <input type="email" class="form-control" id="newWhitelistEmail" placeholder="convidado@exemplo.com">
+              <button class="btn btn-secondary" id="btnAddWhitelistEmail">Adicionar Convidado</button>
+            </div>
+
+            <div class="whitelist-list" id="whitelistContainer">
+              <div class="whitelist-item">
+                <span class="email-text" id="ownerEmailItem">organizador@driveface.ai</span>
+                <span class="badge badge-success">Proprietário</span>
+              </div>
+              <div class="whitelist-item">
+                <span class="email-text">convidado.valido@driveface.ai</span>
+                <span class="badge badge-neutral">Visualizador</span>
+                <button class="btn-icon" title="Remover">&times;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ====================================================================
+       GOOGLE DRIVE PICKER MODAL (Estilo Gemini / Google Drive Nativo)
+       ==================================================================== -->
+  <div class="drive-modal-backdrop" id="drivePickerModal" style="display: none;">
+    <div class="drive-modal-dialog glass">
+      
+      <!-- Modal Header -->
+      <div class="drive-modal-header">
+        <div class="drive-modal-brand">
+          <svg width="24" height="24" viewBox="0 0 87.3 78" class="drive-logo-svg">
+            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
+            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+            <path d="m59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5l-13.75-23.8c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8z" fill="#ffba00"/>
+            <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.1 27.9h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#2684fc"/>
+          </svg>
+          <span class="drive-modal-title">Selecionar pasta</span>
+        </div>
+
+        <div class="drive-modal-search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="drivePickerSearch" placeholder="Pesquisar no Drive ou colar link...">
+          <button type="button" class="btn-clear-search hidden" id="btnClearDriveSearch">&times;</button>
+        </div>
+
+        <div class="drive-modal-header-actions">
+          <button type="button" class="btn-icon" id="btnToggleViewMode" title="Alternar grade/lista">
+            <svg id="viewModeIconGrid" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <svg id="viewModeIconList" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button type="button" class="btn-icon" id="btnCloseDrivePicker" title="Fechar modal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Tabs (Idêntico ao Google Drive nativo) -->
+      <div class="drive-modal-tabs">
+        <button type="button" class="drive-tab-btn" data-tab="recent">Recentes</button>
+        <button type="button" class="drive-tab-btn active" data-tab="my_drive">Meu Drive</button>
+        <button type="button" class="drive-tab-btn" data-tab="shared">Compartilhados comigo</button>
+        <button type="button" class="drive-tab-btn" data-tab="starred">Com estrela</button>
+      </div>
+
+      <!-- Path Navigation / Breadcrumbs -->
+      <div class="drive-path-nav">
+        <div class="drive-breadcrumbs" id="driveBreadcrumbs">
+          <span class="crumb active" data-id="root">Meu Drive</span>
+        </div>
+        <button type="button" class="btn-icon btn-sm" id="btnDriveNavigateUp" title="Subir um nível na pasta" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Body / Items Grid -->
+      <div class="drive-modal-body" id="driveModalBody">
+        <!-- Loading State -->
+        <div class="drive-loading-state" id="drivePickerLoading">
+          <div class="drive-spinner"></div>
+          <span>Consultando pastas no Google Drive...</span>
+        </div>
+
+        <!-- Items Container -->
+        <div class="drive-items-grid" id="driveItemsContainer">
+          <!-- Renderizado via JavaScript -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="drive-empty-state" id="drivePickerEmpty" style="display: none;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+          <h4>Nenhuma pasta encontrada</h4>
+          <p id="driveEmptyText">Nenhuma subpasta localizada neste diretório do Google Drive.</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="drive-modal-footer">
+        <div class="drive-selection-info" id="driveSelectionInfo">
+          <span class="text-muted">Nenhuma pasta selecionada. Clique em uma pasta para selecioná-la ou navegue com duplo-clique.</span>
+        </div>
+        <div class="drive-footer-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelDrivePicker">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnConfirmDrivePicker" disabled>
+            Selecionar esta pasta
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

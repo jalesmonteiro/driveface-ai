@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Álbuns — DriveFace AI{% endblock %}
+
+{% block content %}
+<section class="tab-pane active" id="tab-albums-root">
+  
+  <!-- ====================================================================
+       1. VISÃO: GRADE DE ÁLBUNS (EXIBIDA PRIMEIRO)
+       ==================================================================== -->
+  <div id="albumsView">
+    <div class="page-header flex-between">
+      <div>
+        <h2>Meus Álbuns</h2>
+        <p>Selecione um álbum com um clique para visualizar as pessoas identificadas e seus agrupamentos faciais.</p>
+      </div>
+      <div class="header-actions">
+        <a href="/process/" class="btn btn-primary btn-md">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+          Processar Nova Pasta
+        </a>
+      </div>
+    </div>
+
+    <!-- Loading State de Álbuns -->
+    <div class="drive-loading-state" id="albumsLoading" style="padding: 4rem 1rem;">
+      <div class="drive-spinner"></div>
+      <p style="margin-top: 1rem; color: var(--text-muted);">Carregando álbuns indexados do PostgreSQL...</p>
+    </div>
+
+    <!-- Empty State de Álbuns -->
+    <div class="drive-empty-state glass" id="albumsEmpty" style="display: none; padding: 3.5rem 1.5rem; text-align: center; margin-top: 1.5rem; border-radius: var(--radius-lg);">
+      <div style="font-size: 3.5rem; margin-bottom: 1rem;">📁</div>
+      <h3 style="color: #fff; margin-bottom: 0.5rem;">Nenhum álbum processado ainda</h3>
+      <p class="text-muted" style="max-width: 520px; margin: 0 auto 1.5rem; font-size: 0.95rem; line-height: 1.5;">
+        Conecte uma pasta de fotos do seu Google Drive para que o pipeline de IA (RetinaFace e ArcFace) detecte e agrupe as faces automaticamente no banco PostgreSQL.
+      </p>
+      <a href="/process/" class="btn btn-primary btn-md">
+        Processar Primeira Pasta
+      </a>
+    </div>
+
+    <!-- Grade de Cartões de Álbuns -->
+    <div class="albums-grid" id="albumsGrid" style="display: none;"></div>
+  </div>
+
+
+  <!-- ====================================================================
+       2. VISÃO: PESSOAS RECONHECIDAS DO ÁLBUM SELECIONADO (COM 1 CLIQUE)
+       ==================================================================== -->
+  <div id="albumDetailView" style="display: none;">
+    <!-- Barra de Retorno e Ações Rápidas -->
+    <div class="album-breadcrumb-bar">
+      <button type="button" class="btn btn-secondary btn-sm" id="btnBackToAlbums">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        Voltar para Todos os Álbuns
+      </button>
+
+      <div class="album-top-actions">
+        <button type="button" class="btn btn-secondary btn-sm" id="btnShareCurrentAlbum" title="Gerar link de compartilhamento">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+          Compartilhar
+        </button>
+        <button type="button" class="btn btn-danger btn-sm" id="btnDeleteCurrentAlbum" title="Excluir este álbum do banco de dados">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          Excluir Álbum
+        </button>
+      </div>
+    </div>
+
+    <!-- Cabeçalho do Álbum Ativo -->
+    <div class="page-header flex-between album-header-card glass">
+      <div>
+        <div class="album-title-row">
+          <h2 id="currentAlbumTitle">Nome do Álbum</h2>
+          <span class="badge badge-success" id="currentAlbumBadge">0 pessoas</span>
+        </div>
+        <p id="currentAlbumMeta" class="text-muted">Rostos agrupados por similaridade de cosseno ($d \le 0.40$). Clique no cartão da pessoa para ver todas as fotos.</p>
+      </div>
+    </div>
+
+    <!-- Grade de Clusters / Pessoas Reconhecidas -->
+    <div class="clusters-grid" id="clustersGrid">
+      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem;">
+        <div class="drive-spinner" style="margin: 0 auto 1rem;"></div>
+        <p class="text-muted">Carregando grupos de faces do PostgreSQL...</p>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ====================================================================
+     MODAL CUSTOMIZADA: EXCLUSÃO DE ÁLBUM COM OPÇÃO DE FACEID
+     ==================================================================== -->
+<div class="drive-modal-backdrop" id="deleteAlbumModal" style="display: none;">
+  <div class="drive-modal-dialog glass danger-modal">
+    <div class="drive-modal-header danger-header">
+      <div class="danger-header-title">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+          <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+        <span>Excluir Álbum</span>
+      </div>
+      <button type="button" class="btn-icon" id="btnCloseDeleteAlbumModal" title="Fechar">&times;</button>
+    </div>
+    
+    <div class="drive-modal-body modal-body-padded">
+      <p class="modal-main-text">
+        Tem certeza que deseja excluir o álbum <strong id="deleteAlbumModalName" class="gradient-text"></strong>?
+      </p>
+      
+      <!-- Destaque: Fotos do Google Drive NÃO são apagadas -->
+      <div class="alert-box-safe">
+        <div class="alert-safe-icon">🛡️</div>
+        <div>
+          <strong class="alert-safe-title">Suas fotos no Google Drive estão 100% seguras:</strong>
+          <p class="alert-safe-desc">
+            Esta ação remove apenas os registros locais, fotos indexadas e agrupamentos deste álbum no banco de dados PostgreSQL. <strong>Nenhum arquivo ou foto será apagado do seu Google Drive.</strong>
+          </p>
+        </div>
+      </div>
+
+      <!-- Opção de exclusão das FaceIDs relacionadas -->
+      <div class="checkbox-option-box">
+        <label class="custom-checkbox-label">
+          <input type="checkbox" id="checkDeleteFaceIds" class="custom-checkbox">
+          <div class="checkbox-content">
+            <span class="checkbox-title">Excluir também as FaceIDs relacionadas</span>
+            <span class="checkbox-desc">
+              Apaga as identidades biométricas cadastradas (FaceIDs / centróides 512-D e nomes) associadas às pessoas identificadas neste álbum.
+            </span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <div class="drive-modal-footer danger-footer">
+      <button type="button" class="btn btn-secondary" id="btnCancelDeleteAlbum">Cancelar</button>
+      <button type="button" class="btn btn-danger" id="btnConfirmDeleteAlbum">
+        <span id="btnDeleteAlbumText">Excluir Álbum</span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetAlbumId = urlParams.get("album_id");
+  if (typeof initAlbumsPage === "function") {
+    initAlbumsPage(targetAlbumId);
+  }
+});
+</script>
+{% endblock %}

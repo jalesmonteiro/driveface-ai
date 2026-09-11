@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DriveFace AI — Agrupamento Facial Inteligente para Google Drive{% endblock %}</title>
+  <meta name="description" content="Sistema multi-usuário para agrupamento facial e indexação automática em fotos do Google Drive com Deep Learning (RetinaFace, ArcFace) e PostgreSQL pgvector.">
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="dark-theme">
+  <!-- Glow Background Effect -->
+  <div class="bg-glow top-left"></div>
+  <div class="bg-glow bottom-right"></div>
+
+  <!-- Header / Navigation -->
+  <header class="app-header" id="mainHeader">
+    <div class="header-container">
+      <a href="/" class="logo-area" style="text-decoration: none; color: inherit;">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
+            <circle cx="12" cy="12" r="3" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <span class="logo-brand">DriveFace<span class="gradient-text">.AI</span></span>
+          <span class="logo-badge">PostgreSQL pgvector 512-d</span>
+        </div>
+      </a>
+
+      <!-- Live Service Status Pill -->
+      <div class="system-status-pill" id="systemStatusPill" title="PostgreSQL + pgvector, Redis & Celery">
+        <span class="status-dot online"></span>
+        <span class="status-label">Serviços Ativos</span>
+      </div>
+
+      <!-- Navigation Links (Visíveis para usuários logados) -->
+      <nav class="nav-links hidden" id="mainNav">
+        <a href="/dashboard/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}" id="navDashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="/process/" class="nav-item {% if active_page == 'process' %}active{% endif %}" id="navProcess">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+          Processar Pasta
+        </a>
+        <a href="/albums/" class="nav-item {% if active_page == 'albums' or active_page == 'person' %}active{% endif %}" id="navAlbums">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m3 15 5-5c.9-.9 2.1-.9 3 0l7 7"/><path d="m14 14 1-1c.9-.9 2.1-.9 3 0l3 3"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>
+          Álbuns
+        </a>
+        <a href="/shares/" class="nav-item {% if active_page == 'shares' %}active{% endif %}" id="navShares">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+          Compartilhar
+        </a>
+      </nav>
+
+      <!-- User Auth Section -->
+      <div class="user-auth-area" id="userAuthArea">
+        <!-- Renderizado dinamicamente pelo JavaScript -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+
+    <!-- Landing View para visitantes não logados -->
+    <section class="public-landing-view hidden" id="publicLandingView">
+      <div class="landing-hero glass">
+        <div class="landing-badge">
+          <span class="sparkle">✨</span> Acesso Exclusivo via Google
+        </div>
+        <h1 class="landing-title">
+          Agrupamento Facial com Deep Learning em fotos do <span class="gradient-text">Google Drive</span>
+        </h1>
+        <p class="landing-subtitle">
+          Faça login com sua conta do Google para conectar suas pastas de fotos. O sistema utiliza <strong>RetinaFace</strong> e <strong>ArcFace</strong> para agrupar pessoas automaticamente em centróides vetoriais de 512 dimensões com <strong>PostgreSQL pgvector</strong>.
+        </p>
+
+        <div class="google-auth-box">
+          <button class="btn btn-google btn-lg" id="btnGoogleLoginMain">
+            <svg width="22" height="22" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+              <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2s.7 5.5 1.9 7.9l3.7-2.9z"/>
+              <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+            </svg>
+            Entrar com Google
+          </button>
+          <span class="auth-note">Cadastro instantâneo via API oficial do Google. Não armazenamos senhas.</span>
+        </div>
+
+        <div class="demo-fallback-box">
+          <span class="text-muted" style="font-size: 0.85rem;">Desenvolvendo localmente sem credenciais Google?</span>
+          <button class="btn btn-secondary btn-sm" id="btnDemoLogin">
+            Simular Acesso com Conta Google (Demonstração)
+          </button>
+        </div>
+      </div>
+
+      <!-- Feature Cards -->
+      <div class="features-grid">
+        <div class="feature-card glass">
+          <div class="feature-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+          </div>
+          <h3>Modelos de Visão de Ponta</h3>
+          <p>RetinaFace com SCRFD para detecção anatômica precisa de 5 pontos faciais e ArcFace para embeddings normalizados L2 de 512 dimensões.</p>
+        </div>
+
+        <div class="feature-card glass">
+          <div class="feature-icon cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg>
+          </div>
+          <h3>PostgreSQL 16 + pgvector</h3>
+          <p>Busca vetorial por similaridade de cosseno direto no banco de dados com índices HNSW. Performance de milissegundos sem bancos separados.</p>
+        </div>
+
+        <div class="feature-card glass">
+          <div class="feature-icon emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Streaming Volátil em RAM</h3>
+          <p>As fotos são lidas em buffer de memória (io.BytesIO) diretamente da Google Drive API v3 e nunca salvas em disco físico, garantindo privacidade máxima.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Conteúdo da Página Autenticada -->
+    <div class="authenticated-container" id="authenticatedContainer">
+      {% block content %}{% endblock %}
+    </div>
+
+  </main>
+
+  <!-- ====================================================================
+       GOOGLE DRIVE PICKER MODAL (Estilo Gemini / Google Drive Nativo)
+       ==================================================================== -->
+  <div class="drive-modal-backdrop" id="drivePickerModal" style="display: none;">
+    <div class="drive-modal-dialog glass">
+      
+      <!-- Modal Header -->
+      <div class="drive-modal-header">
+        <div class="drive-modal-brand">
+          <svg width="24" height="24" viewBox="0 0 87.3 78" class="drive-logo-svg">
+            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
+            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+            <path d="m59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5l-13.75-23.8c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8z" fill="#ffba00"/>
+            <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.1 27.9h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#2684fc"/>
+          </svg>
+          <span class="drive-modal-title">Selecionar pasta</span>
+        </div>
+
+        <div class="drive-modal-search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="drivePickerSearch" placeholder="Pesquisar no Drive ou colar link...">
+          <button type="button" class="btn-clear-search hidden" id="btnClearDriveSearch">&times;</button>
+        </div>
+
+        <div class="drive-modal-header-actions">
+          <button type="button" class="btn-icon" id="btnToggleViewMode" title="Alternar grade/lista">
+            <svg id="viewModeIconGrid" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <svg id="viewModeIconList" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button type="button" class="btn-icon" id="btnCloseDrivePicker" title="Fechar modal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div class="drive-modal-tabs">
+        <button type="button" class="drive-tab-btn" data-tab="recent">Recentes</button>
+        <button type="button" class="drive-tab-btn active" data-tab="my_drive">Meu Drive</button>
+        <button type="button" class="drive-tab-btn" data-tab="shared">Compartilhados comigo</button>
+        <button type="button" class="drive-tab-btn" data-tab="starred">Com estrela</button>
+      </div>
+
+      <!-- Path Navigation / Breadcrumbs -->
+      <div class="drive-path-nav">
+        <div class="drive-breadcrumbs" id="driveBreadcrumbs">
+          <span class="crumb active" data-id="root">Meu Drive</span>
+        </div>
+        <button type="button" class="btn-icon btn-sm" id="btnDriveNavigateUp" title="Subir um nível na pasta" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Body / Items Grid -->
+      <div class="drive-modal-body" id="driveModalBody">
+        <div class="drive-loading-state" id="drivePickerLoading">
+          <div class="drive-spinner"></div>
+          <span>Consultando pastas no Google Drive...</span>
+        </div>
+
+        <div class="drive-items-grid" id="driveItemsContainer"></div>
+
+        <div class="drive-empty-state" id="drivePickerEmpty" style="display: none;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+          <h4>Nenhuma pasta encontrada</h4>
+          <p id="driveEmptyText">Nenhuma subpasta localizada neste diretório do Google Drive.</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="drive-modal-footer">
+        <div class="drive-selection-info" id="driveSelectionInfo">
+          <span class="text-muted">Nenhuma pasta selecionada. Clique em uma pasta para selecioná-la ou navegue com duplo-clique.</span>
+        </div>
+        <div class="drive-footer-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelDrivePicker">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnConfirmDrivePicker" disabled>
+            Selecionar esta pasta
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/app.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Compartilhamento & Acesso — DriveFace AI{% endblock %}
+
+{% block content %}
+<section class="tab-pane active" id="tab-shares">
+  <div class="page-header">
+    <h2>Compartilhamento Seguro & Controle de Acesso (ACL)</h2>
+    <p>Gere links com token seguro e gerencie a lista de e-mails autorizados a visualizar as fotos deste álbum.</p>
+  </div>
+
+  <div class="share-card glass">
+    <div class="form-group">
+      <label for="shareAlbumSelect">Selecione o Álbum para Gerenciar</label>
+      <select class="form-control select-md" id="shareAlbumSelect">
+        <option value="" disabled selected>Carregando álbuns...</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-top: 1.5rem;">
+      <label for="shareUrlInput">Link Seguro de Acesso ao Álbum</label>
+      <div class="copy-input-group">
+        <input type="text" id="shareUrlInput" class="form-control font-mono" readonly value="https://driveface.ai/?shared_token=...">
+        <button class="btn btn-primary" id="btnCopyShareLink">Copiar Link</button>
+      </div>
+      <span class="form-help">Apenas usuários autenticados com e-mails cadastrados na whitelist abaixo poderão abrir este link.</span>
+    </div>
+
+    <div class="divider" style="margin: 2rem 0; height: 1px; background: var(--border-glass);"></div>
+
+    <div class="whitelist-manager">
+      <h3>Lista de Acesso Autorizado (Whitelist)</h3>
+      <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.85rem;">Adicione endereços de e-mail do Google para autorizar a visualização das pessoas identificadas neste álbum.</p>
+
+      <div class="whitelist-add-box" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
+        <input type="email" id="newWhitelistEmail" class="form-control" placeholder="convidado@gmail.com" style="max-width: 380px;">
+        <button class="btn btn-secondary" id="btnAddWhitelistEmail">Adicionar Convidado</button>
+      </div>
+
+      <div class="whitelist-list" id="whitelistContainer">
+        <div class="whitelist-item">
+          <span class="email-text" id="ownerEmailItem">proprietario@driveface.ai</span>
+          <span class="badge badge-success">Proprietário</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const token = localStorage.getItem("df_access_token");
+  const select = document.getElementById("shareAlbumSelect");
+  const shareInput = document.getElementById("shareUrlInput");
+
+  if (!token) return;
+
+  try {
+    const res = await fetch("/api/v1/albums/", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const albums = await res.json();
+      if (albums && albums.length > 0) {
+        select.innerHTML = albums.map(a => `<option value="${a.id}" data-token="${a.share_token}">${a.folder_name}</option>`).join("");
+        shareInput.value = `${window.location.origin}/?shared_token=${albums[0].share_token}`;
+
+        select.addEventListener("change", () => {
+          const opt = select.options[select.selectedIndex];
+          const st = opt.getAttribute("data-token");
+          if (st) {
+            shareInput.value = `${window.location.origin}/?shared_token=${st}`;
+          }
+        });
+      } else {
+        select.innerHTML = '<option value="" disabled selected>Nenhum álbum processado ainda</option>';
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+});
+</script>
+{% endblock %}

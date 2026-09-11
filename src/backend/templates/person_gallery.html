@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Fotos de {{ person_name|default:"Pessoa Identificada" }} — DriveFace AI{% endblock %}
+
+{% block content %}
+<div class="person-gallery-page">
+  <!-- Top Navigation / Breadcrumbs -->
+  <div class="gallery-nav-bar">
+    <a href="/albums/{% if album_id %}?album_id={{ album_id }}{% endif %}" class="btn-link" style="font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      Voltar para o Álbum
+    </a>
+    <span class="text-muted" style="margin: 0 0.5rem;">/</span>
+    <span class="text-muted" id="galleryAlbumBreadcrumb">Álbum</span>
+    <span class="text-muted" style="margin: 0 0.5rem;">/</span>
+    <span class="gradient-text font-bold" id="galleryPersonBreadcrumb">Fotos da Pessoa</span>
+  </div>
+
+  <!-- Person Profile Header Card -->
+  <div class="person-profile-header glass">
+    <div class="person-profile-info">
+      <div class="cluster-avatar-wrapper" style="width: 88px; height: 88px; margin-bottom: 0;">
+        <div class="cluster-avatar" id="personAvatarContainer">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+      </div>
+      <div class="person-details">
+        <div class="person-name-row">
+          <h2 id="personNameDisplay">Carregando...</h2>
+          <button class="btn-icon" id="btnEditPersonName" title="Renomear pessoa">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
+        </div>
+        <p class="text-muted" id="personMetaInfo">Consultando fotos identificadas...</p>
+      </div>
+    </div>
+
+    <!-- Export Action Buttons -->
+    <div class="person-export-actions">
+      <button class="btn btn-secondary btn-md" id="btnGalleryExportZip">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        Baixar Todas em ZIP
+      </button>
+      <button class="btn btn-primary btn-md" id="btnGalleryExportDrive">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+        Salvar no Google Drive
+      </button>
+    </div>
+  </div>
+
+  <!-- Photos Gallery Grid -->
+  <div class="person-photos-container">
+    <div class="drive-loading-state" id="galleryLoading">
+      <div class="drive-spinner"></div>
+      <p>Carregando fotos do Google Drive em streaming de memória...</p>
+    </div>
+
+    <div class="person-photos-grid" id="personPhotosGrid" style="display: none;"></div>
+
+    <div class="empty-state" id="galleryEmpty" style="display: none;">
+      <p>Nenhuma foto foi associada a este grupo no momento.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Image Lightbox Modal -->
+<div class="lightbox-backdrop" id="photoLightbox" style="display: none;">
+  <div class="lightbox-dialog glass">
+    <div class="lightbox-header">
+      <span class="lightbox-title" id="lightboxFilename">Foto</span>
+      <div class="lightbox-actions">
+        <a id="lightboxDownloadBtn" href="#" download class="btn-icon" title="Baixar foto">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        </a>
+        <button class="btn-icon" id="btnCloseLightbox" title="Fechar">&times;</button>
+      </div>
+    </div>
+    <div class="lightbox-body">
+      <img id="lightboxImage" src="" alt="Foto expandida">
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const albumId = "{{ album_id }}";
+  const clusterId = "{{ cluster_id }}";
+  const token = localStorage.getItem("df_access_token");
+
+  const personNameDisplay = document.getElementById("personNameDisplay");
+  const personMetaInfo = document.getElementById("personMetaInfo");
+  const personAvatarContainer = document.getElementById("personAvatarContainer");
+  const personPhotosGrid = document.getElementById("personPhotosGrid");
+  const galleryLoading = document.getElementById("galleryLoading");
+  const galleryEmpty = document.getElementById("galleryEmpty");
+  const galleryAlbumBreadcrumb = document.getElementById("galleryAlbumBreadcrumb");
+  const galleryPersonBreadcrumb = document.getElementById("galleryPersonBreadcrumb");
+  const btnEditPersonName = document.getElementById("btnEditPersonName");
+  const btnGalleryExportZip = document.getElementById("btnGalleryExportZip");
+  const btnGalleryExportDrive = document.getElementById("btnGalleryExportDrive");
+
+  // Lightbox Elements
+  const photoLightbox = document.getElementById("photoLightbox");
+  const lightboxImage = document.getElementById("lightboxImage");
+  const lightboxFilename = document.getElementById("lightboxFilename");
+  const lightboxDownloadBtn = document.getElementById("lightboxDownloadBtn");
+  const btnCloseLightbox = document.getElementById("btnCloseLightbox");
+
+  let currentClusterLabel = "Pessoa";
+
+  async function loadClusterPhotos() {
+    if (!token) return;
+
+    try {
+      const res = await (window.authFetch || fetch)(`/api/v1/albums/${albumId}/clusters/${clusterId}/photos/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        currentClusterLabel = data.label || "Pessoa Identificada";
+
+        personNameDisplay.innerText = currentClusterLabel;
+        galleryAlbumBreadcrumb.innerText = data.album_name || "Álbum";
+        galleryPersonBreadcrumb.innerText = currentClusterLabel;
+        personMetaInfo.innerText = `${data.photos ? data.photos.length : data.face_count} fotos encontradas neste álbum do Google Drive`;
+
+        galleryLoading.style.display = "none";
+
+        if (!data.photos || data.photos.length === 0) {
+          galleryEmpty.style.display = "block";
+          return;
+        }
+
+        // Configura avatar da pessoa com a primeira foto
+        if (data.photos[0]) {
+          personAvatarContainer.innerHTML = `<img src="${data.photos[0].stream_url}" class="cluster-avatar" style="object-fit: cover;" />`;
+        }
+
+        personPhotosGrid.style.display = "grid";
+        personPhotosGrid.innerHTML = data.photos.map((photo, idx) => `
+          <div class="photo-card glass" data-url="${photo.stream_url}" data-name="${photo.filename}">
+            <div class="photo-img-wrapper">
+              <img src="${photo.stream_url}" alt="${photo.filename}" loading="lazy" />
+              <div class="photo-overlay">
+                <span class="photo-view-badge">Expandir Imagem</span>
+              </div>
+            </div>
+            <div class="photo-card-footer">
+              <span class="photo-name">${photo.filename}</span>
+            </div>
+          </div>
+        `).join("");
+
+        // Clique para abrir Lightbox
+        document.querySelectorAll(".photo-card").forEach(card => {
+          card.addEventListener("click", () => {
+            const url = card.getAttribute("data-url");
+            const name = card.getAttribute("data-name");
+            lightboxImage.src = url;
+            lightboxFilename.innerText = name;
+            lightboxDownloadBtn.href = url;
+            photoLightbox.style.display = "flex";
+          });
+        });
+
+      } else {
+        galleryLoading.style.display = "none";
+        galleryEmpty.style.display = "block";
+        galleryEmpty.innerHTML = "<p>Não foi possível carregar as fotos desta pessoa.</p>";
+      }
+    } catch (e) {
+      console.error(e);
+      galleryLoading.style.display = "none";
+      galleryEmpty.style.display = "block";
+    }
+  }
+
+  // Renomear pessoa
+  btnEditPersonName?.addEventListener("click", async () => {
+    const newName = prompt(`Identificar pessoa (${currentClusterLabel}):`, currentClusterLabel);
+    if (newName && newName.trim() && newName.trim() !== currentClusterLabel) {
+      const cleanName = newName.trim();
+      try {
+        const res = await (window.authFetch || fetch)(`/api/v1/faces/clusters/${clusterId}/name/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ person_name: cleanName })
+        });
+        if (res.ok) {
+          currentClusterLabel = cleanName;
+          personNameDisplay.innerText = cleanName;
+          galleryPersonBreadcrumb.innerText = cleanName;
+          if (typeof showToast === "function") {
+            showToast(`Pessoa renomeada para "${cleanName}"! Centróide L2 atualizado.`, "success");
+          }
+        }
+      } catch (e) {
+        personNameDisplay.innerText = cleanName;
+      }
+    }
+  });
+
+  // Baixar todas em ZIP
+  btnGalleryExportZip?.addEventListener("click", () => {
+    if (typeof showToast === "function") {
+      showToast(`Gerando arquivo .ZIP das fotos de "${currentClusterLabel}"...`, "success");
+    }
+    const authToken = token || localStorage.getItem("df_access_token") || "";
+    window.location.href = `/api/v1/export/clusters/${clusterId}/zip/?token=${encodeURIComponent(authToken)}`;
+  });
+
+  // Exportar para Google Drive
+  btnGalleryExportDrive?.addEventListener("click", async () => {
+    if (typeof showToast === "function") {
+      showToast(`Criando pasta "DriveFace - ${currentClusterLabel}" no Google Drive...`, "success");
+    }
+    try {
+      const res = await (window.authFetch || fetch)(`/api/v1/export/clusters/${clusterId}/drive/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ target_folder_name: `DriveFace - ${currentClusterLabel}` })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof showToast === "function") {
+          showToast(`Fotos copiadas com sucesso para o Drive! (${data.copied_files_count} fotos)`, "success");
+        }
+        if (data.drive_web_view_link) {
+          window.open(data.drive_web_view_link, "_blank");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  // Fechar Lightbox
+  btnCloseLightbox?.addEventListener("click", () => {
+    photoLightbox.style.display = "none";
+  });
+  photoLightbox?.addEventListener("click", e => {
+    if (e.target === photoLightbox) photoLightbox.style.display = "none";
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") photoLightbox.style.display = "none";
+  });
+
+  loadClusterPhotos();
+});
+</script>
+{% endblock %}

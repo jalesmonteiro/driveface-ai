@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — DriveFace AI{% endblock %}
+
+{% block content %}
+<section class="tab-pane active" id="tab-dashboard">
+  <!-- Hero Section -->
+  <div class="hero-card glass">
+    <div class="hero-content">
+      <div class="hero-tag">
+        <span class="sparkle">⚡</span> Visão Computacional de Alto Desempenho
+      </div>
+      <h2>Bem-vindo, <span class="gradient-text" id="userGreetingName">Usuário</span></h2>
+      <p class="hero-desc">
+        Indexe faces em fotos hospedadas no Google Drive sem download em disco local. Agrupamento inteligente com RetinaFace, ArcFace e busca vetorial por similaridade de cosseno com PostgreSQL 16 + pgvector.
+      </p>
+
+      <div class="hero-actions">
+        <a href="/process/" class="btn btn-primary btn-lg" id="btnHeroProcess">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          Processar Nova Pasta
+        </a>
+        <a href="/albums/" class="btn btn-secondary btn-lg" id="btnHeroGoClusters">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          Ver Meus Álbuns
+        </a>
+      </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="metrics-grid">
+      <div class="metric-card glass">
+        <div class="metric-icon purple">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg>
+        </div>
+        <div class="metric-info">
+          <span class="metric-value">512-D</span>
+          <span class="metric-label">Espaço Vetorial L2 (ArcFace)</span>
+        </div>
+      </div>
+
+      <div class="metric-card glass">
+        <div class="metric-icon cyan">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="metric-info">
+          <span class="metric-value">DBSCAN</span>
+          <span class="metric-label">Clustering por Cosseno</span>
+        </div>
+      </div>
+
+      <div class="metric-card glass">
+        <div class="metric-icon emerald">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="metric-info">
+          <span class="metric-value">Multi-Tenant</span>
+          <span class="metric-label">Isolamento Estrito por Conta</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meus Álbuns Recentes -->
+  <div class="dashboard-widget glass" style="margin-top: 2rem;">
+    <div class="widget-header">
+      <div class="widget-title">
+        <span class="pulse-indicator"></span>
+        <h3>Meus Álbuns Processados</h3>
+      </div>
+      <a href="/process/" class="btn btn-primary btn-sm">+ Novo Processamento</a>
+    </div>
+    <div class="widget-body" id="dashboardAlbumsList">
+      <div class="drive-loading-state" id="dashboardAlbumsLoading">
+        <div class="drive-spinner"></div>
+        <p>Carregando álbuns do PostgreSQL...</p>
+      </div>
+      <div id="dashboardAlbumsContainer" class="dashboard-albums-grid" style="display: none;"></div>
+      <div class="empty-state" id="dashboardAlbumsEmpty" style="display: none;">
+        <p>Nenhum álbum foi processado ainda nesta conta.</p>
+        <a href="/process/" class="btn btn-secondary btn-sm">Processar Primeira Pasta</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Jobs Status Widget -->
+  <div class="dashboard-widget glass" style="margin-top: 1.5rem;">
+    <div class="widget-header">
+      <div class="widget-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <h3>Fila de Processamento Facial (Celery / Redis)</h3>
+      </div>
+      <span class="badge badge-success">Online</span>
+    </div>
+    <div class="widget-body" id="dashboardJobsList">
+      <div class="empty-state">
+        <p>Fila assíncrona operando normalmente. Tarefas são executadas em segundo plano com workers Celery.</p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const token = localStorage.getItem("df_access_token");
+  const container = document.getElementById("dashboardAlbumsContainer");
+  const loading = document.getElementById("dashboardAlbumsLoading");
+  const empty = document.getElementById("dashboardAlbumsEmpty");
+
+  if (!token) return;
+
+  try {
+    const fetchFunc = window.authFetch || fetch;
+    const res = await fetchFunc("/api/v1/albums/", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const albums = await res.json();
+      loading.style.display = "none";
+      if (!albums || albums.length === 0) {
+        empty.style.display = "block";
+      } else {
+        container.style.display = "grid";
+        container.innerHTML = albums.map(a => `
+          <div class="drive-folder-card glass">
+            <div class="drive-folder-icon-wrap">
+              <span style="font-size: 2rem;">📁</span>
+              <span class="badge badge-success">${a.total_clusters || 0} pessoas</span>
+            </div>
+            <div class="drive-folder-info">
+              <h4 style="color: #fff; font-size: 1.05rem; margin-bottom: 0.25rem;">${a.folder_name}</h4>
+              <span class="text-muted text-sm font-mono">${new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
+            </div>
+            <div style="margin-top: 0.75rem;">
+              <a href="/albums/?album_id=${a.id}" class="btn btn-primary btn-sm btn-block">Abrir Álbum &rarr;</a>
+            </div>
+          </div>
+        `).join("");
+      }
+    }
+  } catch (e) {
+    loading.style.display = "none";
+  }
+});
+</script>
+{% endblock %}

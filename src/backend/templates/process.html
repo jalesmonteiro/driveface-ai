@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Processar Pasta — DriveFace AI{% endblock %}
+
+{% block content %}
+<section class="tab-pane active" id="tab-process">
+  <div class="page-header">
+    <h2>Processar Nova Pasta do Google Drive</h2>
+    <p>Conecte uma pasta de fotos para extrair faces, calcular embeddings de 512 dimensões com ArcFace e agrupar pessoas no PostgreSQL pgvector.</p>
+  </div>
+
+  <div class="form-container glass">
+    <!-- Seletor Visual do Google Drive -->
+    <div class="drive-folder-selector-box glass">
+      <div class="selector-header">
+        <div class="selector-title">
+          <svg width="28" height="28" viewBox="0 0 87.3 78" class="drive-logo-svg">
+            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
+            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+            <path d="m59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5l-13.75-23.8c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8z" fill="#ffba00"/>
+            <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.1 27.9h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#2684fc"/>
+          </svg>
+          <div>
+            <h4>Origem das Fotos: Google Drive</h4>
+            <p>Selecione visualmente uma pasta da sua conta Google ou navegue pelas subpastas.</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary" id="btnOpenDrivePicker">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+          Navegar no Google Drive...
+        </button>
+      </div>
+
+      <!-- Card exibido quando a pasta é selecionada -->
+      <div class="selected-folder-banner" id="selectedFolderBanner" style="display: none;">
+        <div class="banner-folder-icon">📁</div>
+        <div class="banner-folder-details">
+          <div class="banner-folder-name" id="displayFolderName">Nome da Pasta</div>
+          <div class="banner-folder-id" id="displayFolderId">ID: 1A2b3c...</div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnChangeSelectedFolder">Trocar Pasta</button>
+      </div>
+    </div>
+
+    <form id="formProcessAlbum">
+      <div class="form-group" style="margin-top: 1.5rem;">
+        <label for="folderNameInput">Nome do Álbum / Evento</label>
+        <input type="text" id="folderNameInput" class="form-control" placeholder="Ex: Formatura Turma 2026, Aniversário" required>
+        <span class="form-help">Nome de exibição amigável para este conjunto de fotos (preenchido automaticamente ao selecionar do Drive).</span>
+      </div>
+
+      <!-- Toggle de inserção manual de ID/URL -->
+      <div class="manual-id-toggle-wrap">
+        <button type="button" class="btn-link" id="btnToggleManualId">
+          <span id="manualIdToggleIcon">▸</span> Inserir ID ou link do Google Drive manualmente
+        </button>
+        <div class="manual-id-collapsible" id="manualIdCollapsible" style="display: none;">
+          <div class="form-group" style="margin-top: 0.75rem;">
+            <label for="folderIdInput">ID da Pasta no Google Drive</label>
+            <input type="text" id="folderIdInput" class="form-control font-mono" placeholder="Ex: 1A2b3C4d5E6f7G8h9I0jKlMnOp" required>
+            <span class="form-help">Copie o ID que aparece após <code>drive.google.com/drive/folders/<strong>ID_AQUI</strong></code> ou selecione no botão acima.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1.5rem;">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoSuggestCheck" checked>
+          <span>Ativar auto-sugestão com base em identidades cadastradas anteriormente (Centróides L2)</span>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-lg" id="btnSubmitProcess">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Iniciar Pipeline de Visão
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Live Job Tracker Box -->
+  <div class="job-tracker-card glass hidden" id="jobTrackerCard">
+    <div class="tracker-header">
+      <div>
+        <h4 id="trackerAlbumTitle">Processando Álbum...</h4>
+        <span class="tracker-job-id font-mono" id="trackerJobId">Job: #---</span>
+      </div>
+      <span class="badge badge-processing" id="trackerStatusBadge">Processando</span>
+    </div>
+
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" id="progressBarFill" style="width: 15%;"></div>
+    </div>
+
+    <div class="tracker-stats">
+      <div class="stat-item">
+        <span class="stat-label">Progresso</span>
+        <span class="stat-value" id="trackerPercentage">0%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Fotos Analisadas</span>
+        <span class="stat-value" id="trackerPhotosCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Faces Detectadas</span>
+        <span class="stat-value" id="trackerFacesCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Pessoas Agrupadas</span>
+        <span class="stat-value" id="trackerPeopleCount">0</span>
+      </div>
+    </div>
+
+    <div class="tracker-footer">
+      <span class="tracker-step-desc" id="trackerStepDesc">Iniciando streaming volátil em RAM...</span>
+      <a href="/albums/" class="btn btn-secondary btn-sm hidden" id="btnViewCompletedAlbum">Ver Álbum Agrupado &rarr;</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

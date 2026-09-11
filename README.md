@@ -181,6 +181,11 @@ Para aplicar migrações dentro do contêiner Docker:
 docker compose -f docker/docker-compose.yml exec web python manage.py migrate
 ```
 
+Para recarregar alterações nos serviços da aplicação sem reiniciar o banco de dados:
+```bash
+docker compose -f docker/docker-compose.yml up -d --force-recreate web worker
+```
+
 Para parar os serviços:
 ```bash
 docker compose -f docker/docker-compose.yml down
@@ -209,3 +214,81 @@ Os submódulos da aplicação residem no diretório `src/backend/apps` (ex.: `fa
 Para que editores como o **VS Code**, **Antigravity IDE** e o analisador **Pyright/Pylance** reconheçam as importações diretas (`from faces.models import ...`, `from albums.permissions import ...`) sem warnings de *"Cannot find module"*:
 - As configurações de caminhos extras já estão definidas em `.vscode/settings.json` (`python.analysis.extraPaths`), em `pyrightconfig.json` e no `pyproject.toml` (`[tool.pyright] extraPaths`).
 - No ambiente virtual local, o arquivo `.venv/Lib/site-packages/driveface.pth` adiciona automaticamente `src/backend` e `src/backend/apps` ao `sys.path`.
+
+---
+
+## Guia Extra: Criação das Credenciais no Google Cloud Console
+
+> [!IMPORTANT]
+> **Uma única chave (Client ID + Client Secret) serve para ambas as APIs!**
+> Você **não precisa** criar credenciais separadas para a *Google Drive API* e para a *Google People API*. No ecossistema Google Cloud OAuth2, um único **ID do cliente OAuth** autentica o usuário e solicita permissões combinadas para múltiplos serviços através dos **Escopos (Scopes)** configurados.
+
+---
+
+### 1. Criar o Projeto e Ativar as APIs
+1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie um novo projeto (ex: `DriveFace AI`).
+2. Acesse o menu **APIs e Serviços** > **Biblioteca** e ative:
+   - **Google Drive API**
+   - **Google People API** (ou **Google Identity**)
+
+### 2. Configurar a Tela de Consentimento OAuth
+1. Vá em **APIs e Serviços** > **Tela de consentimento OAuth**.
+2. Selecione o tipo de usuário **Externo** e clique em **Criar**.
+3. Preencha o nome do aplicativo (`DriveFace AI`) e seu e-mail de suporte.
+4. Na etapa **Escopos**, adicione os escopos de perfil e drive:
+   - `.../auth/userinfo.email`
+   - `.../auth/userinfo.profile`
+   - `openid`
+   - `https://www.googleapis.com/auth/drive.readonly`
+   - `https://www.googleapis.com/auth/drive.file`
+5. Na etapa **Usuários de teste** (*Test Users*):
+   - Adicione o seu e-mail do Google (e de qualquer outra pessoa que for testar). **Apenas e-mails listados aqui conseguirão fazer login** enquanto o aplicativo estiver com status *"Testing"*.
+
+### 3. Criar a Chave de Credencial (Client ID)
+1. Vá em **APIs e Serviços** > **Credenciais**.
+2. Clique em **+ Criar Credenciais** > **ID do cliente OAuth**.
+3. Se abrir o assistente com *"Qual API você usa?"*:
+   - Escolha **Google Drive API**.
+   - Em *"Que dados você acessará?"*, marque **Dados do usuário** (*User data*).
+4. No tipo de aplicativo, selecione **Aplicativo da Web** (*Web Application*).
+5. Nome: `DriveFace Web Local`.
+6. Configure as URLs de desenvolvimento:
+   - **Origens JavaScript autorizadas:**
+     ```text
+     http://localhost:8000
+     ```
+     *(Atenção: Não coloque barra `/` no final da URL).*
+   - **URIs de redirecionamento autorizados:**
+     ```text
+     http://localhost:8000/api/v1/google/oauth/callback/
+     ```
+7. Clique em **Criar**.
+
+### 4. Adicionar ao arquivo `.env`
+Copie o **ID do cliente** e a **Chave secreta do cliente** (*Client Secret*) e adicione ao seu arquivo `.env`:
+
+```ini
+# === Google Drive & Identity OAuth2 (Uma única chave atende ambas APIs) ===
+GOOGLE_CLIENT_ID=seu_client_id_aqui.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/google/oauth/callback/
+```
+
+---
+
+### 5. Status do App: "Testing" vs "In Production" (Limitações)
+
+Ao finalizar a criação, o Google exibe o aviso de que o aplicativo está com status de publicação **"Testing"**. 
+
+**Vai dar certo testar?**
+**Sim, perfeitamente!** O modo "Testing" foi feito justamente para você desenvolver, rodar localmente e validar toda a aplicação sem custos nem burocracias.
+
+**Quais são as limitações do modo "Testing"?**
+1. **Lista de Usuários de Teste (Whitelist restrita):** Apenas os e-mails adicionados na aba **Usuários de teste** da Tela de consentimento conseguirão logar. Qualquer outra conta receberá erro `403 (access_denied)`. O limite é de até 100 usuários de teste.
+2. **Expiração do Refresh Token em 7 dias:** Por segurança em modo de desenvolvimento, os tokens de atualização expiram após 7 dias. Quando isso acontecer, basta clicar em "Conectar com Google" novamente para renovar a sessão.
+3. **Aviso de "App não verificado":** Ao fazer login pela primeira vez, o Google exibirá uma tela avisando *"O Google não verificou este app"*. Para prosseguir normalmente:
+   - Clique em **"Avançado"** (ou *Advanced*).
+   - Clique em **"Acessar DriveFace AI (não seguro)"** (ou *Go to DriveFace AI (unsafe)*) e conceda as permissões.
+
+> *Nota: Você só precisará mudar para "In Production" e submeter à verificação do Google (que leva de 4 a 6 semanas para aprovar escopos do Drive) caso decida publicar o sistema comercialmente para qualquer usuário anônimo na internet.*
+

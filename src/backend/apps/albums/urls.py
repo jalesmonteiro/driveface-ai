@@ -1,15 +1,31 @@
 from django.urls import path
 from .views import (
+    AlbumListView,
     ProcessAlbumView,
     JobStatusView,
     AlbumDetailView,
+    AlbumClustersListView,
+    ClusterPhotosListView,
+    PhotoStreamView,
     AlbumShareManageView,
     SharedAlbumDetailView,
 )
 
 urlpatterns = [
+    path("", AlbumListView.as_view(), name="album_list"),
     path("process/", ProcessAlbumView.as_view(), name="album_process"),
     path("<uuid:album_id>/", AlbumDetailView.as_view(), name="album_detail"),
+    path("<uuid:album_id>/clusters/", AlbumClustersListView.as_view(), name="album_clusters"),
+    path(
+        "<uuid:album_id>/clusters/<uuid:cluster_id>/photos/",
+        ClusterPhotosListView.as_view(),
+        name="cluster_photos",
+    ),
+    path(
+        "photos/<uuid:photo_id>/stream/",
+        PhotoStreamView.as_view(),
+        name="photo_stream",
+    ),
     path(
         "<uuid:album_id>/shares/",
         AlbumShareManageView.as_view(),
