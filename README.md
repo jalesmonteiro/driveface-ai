@@ -2,6 +2,27 @@
 
 Sistema inteligente multi-usuário para agrupamento facial e indexação automática em fotos do Google Drive.
 
+---
+
+## 🎓 Entregáveis do Projeto
+
+Abaixo estão os 4 itens solicitados para a entrega e avaliação do projeto:
+
+1. **ML/Data Project Canvas:**
+   - Mapeamento estratégico cobrindo proposta de valor, tarefas de predição, fontes de dados, engenharia de atributos, requisitos de inferência e métricas:
+   - 📄 **[Machine_Learning_Canvas_DriveFace.pdf](docs/Machine_Learning_Canvas_DriveFace.pdf)** *(disponível na pasta `docs/`)*
+
+2. **Notebook com passo-a-passo (Colab / Kaggle):**
+   - *Nota de Arquitetura:* O **DriveFace AI** foi desenvolvido como uma solução completa de engenharia de software e MLOps em produção (Full-Stack distribuído). O pipeline de visão opera de forma assíncrona utilizando **Django 5, Celery e Redis**, com banco vetorial nativo de alta dimensionalidade (**PostgreSQL 16 com `pgvector`**) e integração direta com a **Google Drive API (OAuth2)** processada em memória volátil (`io.BytesIO`). Devido a essa arquitetura desacoplada e modular, o fluxo não se baseia em um notebook isolado (Jupyter/Colab), mas sim em serviços orquestrados via Docker Compose, com suíte completa de testes automatizados (`pytest`) e documentação didática detalhada em **[docs/roteiro_estudo_ia.md](docs/roteiro_estudo_ia.md)** e **[docs/architecture.md](docs/architecture.md)**.
+
+3. **Repositório do Código (GitHub):**
+   - 🔗 **[https://github.com/jalesmonteiro/driveface-ai](https://github.com/jalesmonteiro/driveface-ai)**
+
+4. **Vídeo de Apresentação (Pitch ≤ 10 min):**
+   - 🎥 **[https://drive.google.com/file/d/1mzjssJCwEaLt05XaiDUTEeL1Aqy_Rn8V/view?usp=sharing](https://drive.google.com/file/d/1mzjssJCwEaLt05XaiDUTEeL1Aqy_Rn8V/view?usp=sharing)**
+
+---
+
 ## Arquitetura
 - **Backend:** Django 5.x, Django REST Framework, Celery
 - **Banco de Dados & Vetores:** PostgreSQL 16 com extensão `pgvector` (vetores de 512 dimensões)
@@ -9,7 +30,9 @@ Sistema inteligente multi-usuário para agrupamento facial e indexação automá
 - **Pipeline de Visão:** RetinaFace (Detecção & Landmarks), ArcFace (Deep Embeddings 512-d), DBSCAN (Clustering por Distância de Cosseno)
 - **Integração:** Google Drive API v3 (streaming volátil em RAM via `io.BytesIO`)
 
-Consulte a pasta `docs/` para especificações completas (`const.md`, `spec.md`, `plan.md`, `tasks.md`).
+Consulte a pasta `docs/` para especificações completas (`const.md`, `spec.md`, `plan.md`, `tasks.md`, `architecture.md`, `roteiro_estudo_ia.md`).
+- Para o mapeamento funcional detalhado de cada arquivo do projeto, consulte o guia em **[docs/architecture.md](docs/architecture.md)**.
+- Para a trilha pedagógica e fluxo de reconhecimento de IA, consulte o **[docs/roteiro_estudo_ia.md](docs/roteiro_estudo_ia.md)**.
 
 ### Por que PostgreSQL 16 com pgvector (e não MySQL)?
 
@@ -40,7 +63,7 @@ A escolha do **PostgreSQL 16 com a extensão `pgvector`** em vez de bancos relac
 
 **No Windows (PowerShell):**
 ```powershell
-git clone <url-do-repositorio>
+git clone https://github.com/jalesmonteiro/driveface-ai.git
 cd "driveface ai"
 
 python -m venv .venv
@@ -49,7 +72,7 @@ python -m venv .venv
 
 **No Linux / macOS:**
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/jalesmonteiro/driveface-ai.git
 cd "driveface ai"
 
 python3 -m venv .venv
